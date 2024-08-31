@@ -5,7 +5,7 @@ declare function config(options: {
 }): void;
 /** This will only be populated if mode == "debug". */
 declare const devTools: {
-    byId: Map<string, Signal<any> | Computed<any> | Effect>;
+    byId: Map<string, Computed<any> | Effect | Signal<any>>;
     gc: {
         /** Number of objects in memory */
         readonly alive: number;

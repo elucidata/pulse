@@ -10,6 +10,12 @@ interface PersistedSignalOptions<T> {
     toStorage: (value: T) => string;
     fromStorage: (value: string) => T;
 }
+/**
+ * Create a signal that will persist its value in the storage. (localStorage by default)
+ * The value will be serialized to a string before storing.
+ * The value will be deserialized when retrieved from the storage.
+ * If the storage is not available, it will return a regular signal.
+ */
 declare function persistedSignal<T>(key: string, initialValue: T, options?: Partial<PersistedSignalOptions<T>>): Signal<T>;
 type Updater<T> = Required<T> | ((v: T) => T);
 type Merger<T> = Partial<T> | ((v: T) => Partial<T>);

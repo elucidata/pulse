@@ -1,7 +1,7 @@
 export * from "./index"
 export * from "./with-utils"
 
-import { createElement, useEffect, useMemo, useState } from "react"
+import React, { createElement, useEffect, useMemo, useState } from "react"
 import {
   computed,
   effect,
@@ -46,7 +46,7 @@ export function useSignalValues<T extends any[]>(
   useEffect(() => {
     const effects = signals.map((signal, i) =>
       signal.subscribe((value) => {
-        setValues((prev) => {
+        setValues((prev: any) => {
           const next = prev.slice()
           next[i] = value
           return next

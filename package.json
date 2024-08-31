@@ -1,6 +1,6 @@
 {
   "name": "@elucidata/pulse",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Microscopic signals with automatic dependency tracking.",
   "module": "dist/index.js",
   "type": "module",
@@ -23,7 +23,7 @@
     "url": "git+https://github.com/elucidata/pulse.git"
   },
   "scripts": {
-    "dist": "rm -rf dist && tsup index.ts with-utils.ts for-react.ts --dts --format esm --minify && tsup --entry.pulse with-utils.ts --dts --format esm,iife --minify --no-splitting && bun run stats",
+    "dist": "rm -rf dist && tsup index.ts with-utils.ts for-react.ts --dts --format esm --minify --no-splitting && tsup --entry.pulse with-utils.ts --dts --format esm,iife --minify --no-splitting && bun run stats",
     "stats": "gzip -c9 dist/pulse.js | wc -c | numfmt --to=si",
     "prepublish": "bun run dist",
     "test": "bun test"
@@ -33,6 +33,7 @@
     "tsup": "^8.2.4"
   },
   "peerDependencies": {
+    "@types/react": "^18.3.5",
     "typescript": "^5.0.0",
     "preact": "^10.23.1",
     "react": "^18.3.1"
