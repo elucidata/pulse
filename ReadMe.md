@@ -40,7 +40,7 @@ declare class Effect {
 ## Usage
 
 ```ts
-import { signal, computed, effect } from "pulse"
+import { signal, computed, effect } from "@elucidata/pulse"
 
 const counter = signal(0)
 const doubled = computed(() => counter.get() * 2)
