@@ -1,0 +1,40 @@
+# Numerous always-ignore extensions
+*.diff
+*.err
+*.orig
+*.log
+*.rej
+*.swo
+*.swp
+*.vi
+*~
+*.sass-cache
+*.cache*
+*.dot.*
+.last-deployed-build
+.deployment-info.json
+ChangeLog.txt
+
+# OS or Editor folders
+.DS_Store
+.cache
+.project
+.settings
+.tmproj
+.idea
+.zedstate
+.tags
+nbproject
+Thumbs.db
+*.sublime-workspace
+.obsidian
+*.tsbuildinfo
+*.ts-build
+
+# NPM packages folder.
+node_modules/
+
+# Temporary files.
+tmp/
+temp/
+
