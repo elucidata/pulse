@@ -4,6 +4,9 @@
   "description": "Microscopic signals with automatic dependency tracking.",
   "module": "dist/index.js",
   "type": "module",
+  "main": "dist/index.js",
+  "author": "Matthew Mccray",
+  "license": "MIT",
   "exports": {
     ".": {
       "import": "./dist/index.js"
