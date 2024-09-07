@@ -243,8 +243,11 @@ export class Computed<T> {
   protected _signals = new Set<Speaker>()
   protected _listeners = new Set<Listener>()
 
-  constructor(protected _fn: () => T) {
+  constructor(protected _fn: () => T, protected _eager = false) {
     devTools.track(this)
+    if (_eager) {
+      this._value = this._fn()
+    }
   }
 
   peek() {
@@ -428,8 +431,8 @@ export function signal<T>(initialValue: T) {
  *  counter.set(10)
  *  console.log(double.get()) // 20
  */
-export function computed<T>(computeFn: () => T) {
-  return new Computed(computeFn)
+export function computed<T>(computeFn: () => T, eager = false) {
+  return new Computed(computeFn, eager)
 }
 
 /**

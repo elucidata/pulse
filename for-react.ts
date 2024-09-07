@@ -1,7 +1,7 @@
 export * from "./index"
 export * from "./with-utils"
 
-import React, { createElement, useEffect, useMemo, useState } from "react"
+import React, { createElement, useEffect, useRef, useState } from "react"
 import {
   computed,
   effect,
@@ -14,9 +14,9 @@ import {
 type Readable<T> = Signal<T> | Computed<T>
 
 export function useComputed<T>(computeFn: () => T): T {
-  const derived = useMemo(() => computed(computeFn), [])
-  useEffect(() => () => derived.dispose(), [derived])
-  return useSignalValue(derived)
+  const derived = useRef(computed(computeFn, true)) // useMemo(() => computed(computeFn), [])
+  useEffect(() => () => derived.current.dispose(), [derived.current])
+  return useSignalValue(derived.current)
 }
 
 export function useSignalEffect(effectFn: () => (() => void) | void) {
@@ -27,13 +27,23 @@ export function useSignalEffect(effectFn: () => (() => void) | void) {
 }
 
 export function useSignalValue<T>(signal: Readable<T>): T {
-  const [value, setValue] = useState(() => signal.get())
-  useEffect(() => {
-    const fx = signal.subscribe((v) => {
+  const [value, setValue] = useState(() => signal.peek())
+  const fx = useRef<ReturnType<typeof signal.subscribe>>()
+  if (!fx.current) {
+    fx.current = signal.subscribe((v) => {
+      console.log("useSignalValue", v)
       setValue(v)
     })
-    return () => fx.dispose()
+  }
+  useEffect(() => {
+    return () => fx.current?.dispose()
   }, [signal])
+  // useEffect(() => {
+  //   const fx = signal.subscribe((v) => {
+  //     setValue(v)
+  //   })
+  //   return () => fx.dispose()
+  // }, [signal])
   return value
 }
 
@@ -41,7 +51,7 @@ export function useSignalValues<T extends any[]>(
   ...signals: Readable<T[number]>[]
 ): T {
   const [values, setValues] = useState(() =>
-    signals.map((signal) => signal.get())
+    signals.map((signal) => signal.peek())
   )
   useEffect(() => {
     const effects = signals.map((signal, i) =>

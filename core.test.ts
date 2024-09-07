@@ -137,6 +137,24 @@ describe("Computed", () => {
   it("should compute the value correctly", () => {
     const mySignal = new Signal(10)
     const myComputed = new Computed(() => mySignal.get() * 2)
+
+    expect(myComputed.peek()).toBeUndefined() // Not computed yet
+    expect(myComputed.get()).toBe(20)
+
+    mySignal.set(5)
+    expect(myComputed.get()).toBe(10)
+
+    expect(_registry.size).toBe(2)
+    mySignal.dispose()
+    myComputed.dispose()
+    expect(_registry.size).toBe(0)
+  })
+
+  it("should compute the value correctly in eager mode", () => {
+    const mySignal = new Signal(10)
+    const myComputed = new Computed(() => mySignal.get() * 2, true)
+
+    expect(myComputed.peek()).toBe(20)
     expect(myComputed.get()).toBe(20)
 
     mySignal.set(5)

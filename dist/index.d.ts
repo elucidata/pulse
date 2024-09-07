@@ -5,7 +5,7 @@ declare function config(options: {
 }): void;
 /** This will only be populated if mode == "debug". */
 declare const devTools: {
-    byId: Map<string, Signal<any> | Computed<any> | Effect>;
+    byId: Map<string, Computed<any> | Effect | Signal<any>>;
     gc: {
         /** Number of objects in memory */
         readonly alive: number;
@@ -49,12 +49,13 @@ declare class Signal<T> {
 }
 declare class Computed<T> {
     protected _fn: () => T;
+    protected _eager: boolean;
     readonly id: string;
     protected _value: T;
     protected _isStale: boolean;
     protected _signals: Set<Speaker>;
     protected _listeners: Set<Listener>;
-    constructor(_fn: () => T);
+    constructor(_fn: () => T, _eager?: boolean);
     peek(): T;
     get: () => T;
     subscribe(subscriber: (newValue: T) => void): Effect;
@@ -125,7 +126,7 @@ declare function signal<T>(initialValue: T): Signal<T>;
  *  counter.set(10)
  *  console.log(double.get()) // 20
  */
-declare function computed<T>(computeFn: () => T): Computed<T>;
+declare function computed<T>(computeFn: () => T, eager?: boolean): Computed<T>;
 /**
  * Automatically run a function when its dependencies change.
  *
