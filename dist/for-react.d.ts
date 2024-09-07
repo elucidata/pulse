@@ -16,6 +16,6 @@ declare function useSignalValues<T extends any[]>(...signals: Readable<T[number]
  * use hooks or other React features that require being
  * called inside a component's render function.
  */
-declare function withSignalTracking<T>(Component: React.FunctionComponent<T>): (props: T) => React.CElement<any, React.Component<any, any, any>>;
+declare function experimental_withSignalTracking<T>(Component: React.FunctionComponent<T>): (props: T) => React.CElement<any, React.Component<any, any, any>>;
 
-export { Computed, Signal, useComputed, useSignalEffect, useSignalValue, useSignalValues, withSignalTracking };
+export { Computed, Signal, experimental_withSignalTracking, useComputed, useSignalEffect, useSignalValue, useSignalValues };
