@@ -243,9 +243,9 @@ export class Computed<T> {
   protected _signals = new Set<Speaker>()
   protected _listeners = new Set<Listener>()
 
-  constructor(protected _fn: () => T, protected _eager = false) {
+  constructor(protected _fn: () => T, _eagerEval = false) {
     devTools.track(this)
-    if (_eager) {
+    if (_eagerEval) {
       this._value = this._fn()
     }
   }

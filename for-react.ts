@@ -31,19 +31,12 @@ export function useSignalValue<T>(signal: Readable<T>): T {
   const fx = useRef<ReturnType<typeof signal.subscribe>>()
   if (!fx.current) {
     fx.current = signal.subscribe((v) => {
-      console.log("useSignalValue", v)
       setValue(v)
     })
   }
   useEffect(() => {
     return () => fx.current?.dispose()
   }, [signal])
-  // useEffect(() => {
-  //   const fx = signal.subscribe((v) => {
-  //     setValue(v)
-  //   })
-  //   return () => fx.dispose()
-  // }, [signal])
   return value
 }
 

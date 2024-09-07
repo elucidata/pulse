@@ -5,7 +5,7 @@ declare function config(options: {
 }): void;
 /** This will only be populated if mode == "debug". */
 declare const devTools: {
-    byId: Map<string, Computed<any> | Effect | Signal<any>>;
+    byId: Map<string, Signal<any> | Computed<any> | Effect>;
     gc: {
         /** Number of objects in memory */
         readonly alive: number;
@@ -49,13 +49,12 @@ declare class Signal<T> {
 }
 declare class Computed<T> {
     protected _fn: () => T;
-    protected _eager: boolean;
     readonly id: string;
     protected _value: T;
     protected _isStale: boolean;
     protected _signals: Set<Speaker>;
     protected _listeners: Set<Listener>;
-    constructor(_fn: () => T, _eager?: boolean);
+    constructor(_fn: () => T, _eagerEval?: boolean);
     peek(): T;
     get: () => T;
     subscribe(subscriber: (newValue: T) => void): Effect;
