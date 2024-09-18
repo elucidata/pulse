@@ -6,7 +6,7 @@ Pulse signals are straightforward containers for values—no magic, no proxies, 
 
 No need to worry about tracking dependencies in your computed values or effects—Pulse handles that automatically.
 
-<small>Minify+gzips to < 2kB for core+utils.</small>
+<small>Minify+gzips to < 2kB. Core reactivity is < 1kB.</small>
 
 At its core it's a simple API:
 
@@ -97,11 +97,19 @@ While not recommended, you _could_ do something like this:
 ```tsx
 import { signal } from "@elucidata/pulse"
 import { useComputed } from "@elucidata/pulse/react"
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 
 const ExampleView = (props) => {
   const counter = useMemo(() => signal(1), [])
   const count = useComputed(() => counter.value)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      counter.update((prev) => prev + 1)
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [])
 
   return <div>{count}</div>
 }

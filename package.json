@@ -25,7 +25,9 @@
   "scripts": {
     "dist": "rm -rf dist && tsup ./src/index.ts ./src/utils.ts ./src/react/index.ts --dts --format esm --minify --external react && bun run stats",
     "distTSC": "rm -rf dist && tsc ./src/index.ts ./src/utils.ts ./src/react/index.ts --outDir dist --strict false -d --skipLibCheck --module esnext --target ES2022 && bun run stats",
-    "stats": "gzip -c9 dist/index.js | wc -c | numfmt --to=si",
+    "stats": "echo \"core gzipped:\" && bun run stats:core && echo \"all modules gzipped:\" && bun run stats:all",
+    "stats:core": "gzip -c9 dist/index.js dist/chunk*.js  | wc -c | numfmt --to=si",
+    "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils.js dist/react/index.js  | wc -c | numfmt --to=si",
     "prepublish": "bun run dist",
     "test": "bun test"
   },
