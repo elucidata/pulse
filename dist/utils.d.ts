@@ -1,5 +1,5 @@
 import { Signal } from './index.js';
-export { Computed, Effect, batch, computed, config, devTools, dispose, effect, isComputed, isEffect, isSignal, signal, withIdPrefix } from './index.js';
+export { batch, computed, effect, signal } from './index.js';
 
 interface IStorage {
     getItem(key: string): string | null;
@@ -26,6 +26,6 @@ type Merger<T> = Partial<T> | ((v: T) => Partial<T>);
  * If reportChanges is true, it will return an array of changed keys.
  *
  */
-declare function update<T>(state: Signal<T>, updater: Updater<T> | Merger<T>, reportChanges?: boolean): boolean | (keyof T)[];
+declare function update<T>(state: Signal<T>, updater: Updater<T> | Merger<T>, reportChanges?: boolean): void | (keyof T)[];
 
 export { Signal, persistedSignal, update };

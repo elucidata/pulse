@@ -11,11 +11,11 @@
     ".": {
       "import": "./dist/index.js"
     },
-    "./for-react": {
-      "import": "./dist/for-react.js"
+    "./react": {
+      "import": "./dist/react/index.js"
     },
-    "./with-utils": {
-      "import": "./dist/with-utils.js"
+    "./utils": {
+      "import": "./dist/utils.js"
     }
   },
   "repository": {
@@ -23,18 +23,19 @@
     "url": "git+https://github.com/elucidata/pulse.git"
   },
   "scripts": {
-    "dist": "rm -rf dist && tsup index.ts with-utils.ts for-react.ts --dts --format esm --minify && tsup --entry.pulse with-utils.ts --dts --format esm,iife --minify --no-splitting && bun run stats",
-    "stats": "gzip -c9 dist/pulse.js | wc -c | numfmt --to=si",
+    "dist": "rm -rf dist && tsup ./src/index.ts ./src/utils.ts ./src/react/index.ts --dts --format esm --minify --external react && bun run stats",
+    "distTSC": "rm -rf dist && tsc ./src/index.ts ./src/utils.ts ./src/react/index.ts --outDir dist --strict false -d --skipLibCheck --module esnext --target ES2022 && bun run stats",
+    "stats": "gzip -c9 dist/index.js | wc -c | numfmt --to=si",
     "prepublish": "bun run dist",
     "test": "bun test"
   },
   "devDependencies": {
-    "bun-types": "latest",
-    "tsup": "^8.2.4"
+    "@types/bun": "^1.1.6",
+    "tsup": "^8.2.4",
+    "@types/react": "^18.3.5",
+    "typescript": "^5.0.0"
   },
   "peerDependencies": {
-    "@types/react": "^18.3.5",
-    "typescript": "^5.0.0",
     "preact": "^10.23.1",
     "react": "^18.3.1"
   }

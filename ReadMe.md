@@ -12,28 +12,21 @@ At its core it's a simple API:
 
 ```ts
 declare function signal<T>(intialValue: T): Signal<T>
-declare function computed<T>(worker: () => T): Computed<T>
-declare function effect(worker: () => void): Effect
+declare function computed<T>(worker: () => T): ReadonlySignal<T>
+declare function effect(worker: () => void): void
 declare function batch(worker: () => void): void
 
-declare class Signal<T> {
-  readonly id: string
+declare class ReadonlySignal<T> {
+  readonly value: T // reactive getter
   peek(): T
-  get: () => T
-  set(newValue: T, forceNotify?: boolean): boolean
-  subscribe(listener: (newValue: T) => void): Effect
-  dispose: () => void
+  get(): T
+  subscribe(listener: (newValue: T) => void): () => void
 }
-declare class Computed<T> {
-  readonly id: string
-  peek(): T
-  get: () => T
-  subscribe(listener: (newValue: T) => void): Effect
-  dispose: () => void
-}
-declare class Effect {
-  readonly id: string
-  dispose: () => void
+
+declare class Signal<T> extends ReadonlySignal<T> {
+  readonly value: T // reactive getter and setter
+  set(newValue: T): void
+  update(updater: (oldValue: T) => T): void
 }
 ```
 
@@ -46,19 +39,86 @@ const counter = signal(0)
 const doubled = computed(() => counter.get() * 2)
 
 effect(() => {
-  console.log("Counter:", counter.get(), "doubled:", doubled.get())
+  // Use can use .get() or .value
+  console.log("Counter:", counter.value, "doubled:", doubled.value)
 })
 
 counter.set(1)
+// or counter.value = 1
+// or counter.update(c => c + 1)
 ```
 
 ## Installation
 
 No dependencies or prerequisites other than a JS runtime. Bun is used for development.
+
 To install _pulse_:
 
 ```
-bun install github:elucidata/pulse
+bun install @elucidata/pulse
+```
+
+## React/Preact
+
+There are two ways to react to signal changes: Using a higher-order function, or a hook.
+
+Higher-order function:
+
+```tsx
+import { signal } from "@elucidata/pulse"
+import { observer } from "@elucidata/pulse/react"
+
+const counter = signal(1)
+
+const ExampleView = observer((props) => {
+  return <div>{counter.value}</div>
+})
+```
+
+Hook:
+
+```tsx
+import { signal } from "@elucidata/pulse"
+import { useComputed } from "@elucidata/pulse/react"
+
+const counter = signal(1)
+
+const ExampleView = (props) => {
+  const count = useComputed(() => counter.value)
+
+  return <div>{count}</div>
+}
+```
+
+### Local State
+
+While not recommended, you _could_ do something like this:
+
+```tsx
+import { signal } from "@elucidata/pulse"
+import { useComputed } from "@elucidata/pulse/react"
+import { useMemo } from "react"
+
+const ExampleView = (props) => {
+  const counter = useMemo(() => signal(1), [])
+  const count = useComputed(() => counter.value)
+
+  return <div>{count}</div>
+}
+```
+
+## Svelte
+
+Signals comply with Svelte's store contract:
+
+```html
+<script>
+  import { signal } from "@elucidata/pulse"
+
+  const counter = signal(1)
+</script>
+
+<div>{$counter}</div>
 ```
 
 ## Utilities
@@ -99,7 +159,7 @@ type Merger<T> = Partial<T> | ((v: T) => Partial<T>)
 type Updater<T> = Required<T> | ((v: T) => T)
 ```
 
-Updates a signal with a new value or partial value. If a function is provided as the updater, it receives the current value and should return the updated value. If an object is provided, it will be merged with the current value. When reportChanges is set to true, the function returns an array of keys that were changed
+Updates a signal with a new value or partial value. If a function is provided as the updater, it receives the current value and should return the updated value. If an object is returned, it will be merged with the current value. When reportChanges is set to true, the function returns an array of keys that were changed
 
 ## How is this different than (fill in the blank)
 

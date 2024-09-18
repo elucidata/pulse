@@ -1,1 +1,1 @@
-import{a,b,c,e as d,f as e,g as f,h as g,j as h,k as i,l as j,m as k,n as l,o as m,p as n}from"./chunk-BE7NYE7O.js";export{i as Computed,j as Effect,h as Signal,k as batch,m as computed,a as config,b as devTools,g as dispose,n as effect,e as isComputed,f as isEffect,d as isSignal,l as signal,c as withIdPrefix};
+import"./chunk-H6Z3WHYR.js";import{c as a,e as b,f as c,g as d,h as e}from"./chunk-QN5SRUK7.js";export{a as Signal,e as batch,d as computed,c as effect,b as signal};
