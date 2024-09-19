@@ -15,7 +15,6 @@ describe("Signals Module", () => {
 
       signal.value = 5
 
-      // No need to wait for next tick
       expect(computedValue).toBe(10)
     })
   })
@@ -33,7 +32,6 @@ describe("Signals Module", () => {
 
       signal.value = 2
 
-      // No need to wait for next tick
       expect(observedValue).toBe(2)
     })
 
@@ -50,7 +48,6 @@ describe("Signals Module", () => {
 
       signalB.value = 3
 
-      // No need to wait for next tick
       expect(observedValue).toBe(1) // Should remain unchanged
     })
 
@@ -78,12 +75,10 @@ describe("Signals Module", () => {
 
       signalA.value = 3
 
-      // No need to wait for next tick
       expect(observedValue).toBe(3)
 
       signalB.value = 4
 
-      // No need to wait for next tick
       expect(observedValue).toBe(3) // Should remain unchanged
     })
 
@@ -101,7 +96,6 @@ describe("Signals Module", () => {
 
       signal.value = 2
 
-      // No need to wait for next tick
       expect(observedValue).toBe(1) // Should remain unchanged
     })
 
@@ -123,7 +117,6 @@ describe("Signals Module", () => {
 
       signal.value = 2
 
-      // No need to wait for next tick
       expect(observedValue1).toBe(2)
       expect(observedValue2).toBe(2)
     })
@@ -150,7 +143,6 @@ describe("Signals Module", () => {
 
       signal.value = 2
 
-      // No need to wait for next tick
       expect(observedValue1).toBe(2)
       expect(observedValue2).toBe(2)
 
@@ -184,7 +176,7 @@ describe("Signals Module", () => {
       expect(cleanupOrder).toBe("321")
     })
 
-    it("should cleanup nested effect cleanups correctly", () => {
+    it("should call nested effect cleanups correctly", () => {
       let cleanupOrder = ""
       const disposeRoot = effect(() => {
         // Root effect
@@ -247,7 +239,6 @@ describe("Signals Module", () => {
 
       signalA.value = 3
 
-      // No need to wait for next tick
       expect(observedValue).toBe(3)
       expect(cleanupCalled).toBeTrue()
     })
@@ -255,8 +246,10 @@ describe("Signals Module", () => {
     it("should support nested effect revaluation when dependencies change", () => {
       const signalA = new Signal(1)
       const signalB = new Signal(2)
+
       let observedValueA = 0
       let observedValueB = 0
+
       let rootCleanupCalled = 0
       let nestedCleanupCalled = 0
 
@@ -311,7 +304,6 @@ describe("Signals Module", () => {
 
       signal.value = 5
 
-      // No need to wait for next tick
       expect(computedSignal.value).toBe(15)
     })
   })
@@ -578,38 +570,4 @@ describe("Signal Subscribe Method", () => {
     signal.value = 10
     expect(subscriberValue).toBe(5) // Should not have updated
   })
-
-  // it.skip("should handle unsubscribe during notification", () => {
-  //   // I don't think this is possible
-  //   const signal = new Signal(1)
-  //   let subscriberValue1 = 0
-  //   let subscriberValue2 = 0
-
-  //   // Declare unsubscribe1 before use
-  //   let unsubscribe1!: () => void
-
-  //   const subscriber1 = (value: number) => {
-  //     subscriberValue1 = value
-  //     unsubscribe1() // Unsubscribe during notification
-  //   }
-
-  //   unsubscribe1 = signal.subscribe(subscriber1)
-
-  //   const unsubscribe2 = signal.subscribe((value) => {
-  //     subscriberValue2 = value
-  //   })
-
-  //   // Initial call
-  //   expect(subscriberValue1).toBe(1)
-  //   expect(subscriberValue2).toBe(1)
-
-  //   // Update signal value
-  //   signal.value = 2
-
-  //   // Subscriber1 should have unsubscribed itself, so its value should not change
-  //   expect(subscriberValue1).toBe(1) // Should not have updated
-  //   expect(subscriberValue2).toBe(2)
-
-  //   unsubscribe2()
-  // })
 })

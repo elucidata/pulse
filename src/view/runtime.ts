@@ -3,7 +3,7 @@ import {
   EffectFunction,
   isReadonlySignal,
 } from "../internals"
-import { ComponentFunction, PropsWithChildren } from "./types"
+import { ComponentFunction, Props } from "./types"
 
 export function effect(fn: EffectFunction): void {
   const dispose = baseEffect(fn)
@@ -56,7 +56,7 @@ export function onUnmount(fn: () => void) {
 // JSX-compatible createElement function
 export function h(
   tag: string | ComponentFunction,
-  props: PropsWithChildren | null,
+  props: Props | null,
   ...children: any[]
 ): Node {
   if (typeof tag === "function") {

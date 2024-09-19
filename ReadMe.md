@@ -133,6 +133,27 @@ Signals comply with Svelte's store contract:
 
 Provides a tiny experimental view engine you can optionally include and play with... Feedback welcome. PulseView is closer to solid-js than preact. Components are rendered only once, and update based on signal changes. Plays well with `htm`.
 
+Contains the usual suspects:
+
+```ts
+type Props = { [key: string]: any; };
+type ComponentFunction<P = Props> = (props?: P, children?: any) => HTMLElement | HTMLElement[] | Node | Node[];
+type ComponentProps<F> = F extends ComponentFunction<infer P> ? P : never;
+
+declare function h(tag: string | ComponentFunction, props: Props | null, ...children: any[]): Node;
+declare const html: (strings: TemplateStringsArray, ...values: any[]) => Node | Node[];
+
+declare function setContext(key: any, value: any): void;
+declare function getContext<T>(key: any): T;
+
+declare function onMount(fn: () => void | (() => void)): void;
+
+declare function render(component: ComponentFunction, container: HTMLElement): () => void;
+
+```
+
+### Demo Usage
+
 ```ts
 import { signal, html, render } from "@elucidata/pulse/view"
 
@@ -141,7 +162,7 @@ const count = signal(0)
 const Counter = () => {
   return html`
     <div>
-      <p>Counter: ${() => count.value}</p>
+      <p>Counter: ${count}</p>
       <button onclick=${() => count.value++}>Increment</button>
       <button onclick=${() => count.value--}>Decrement</button>
     </div>
@@ -151,11 +172,11 @@ const Counter = () => {
 const OnEvens = () => {
   onMount(() => {
     console.log("count is even!", count.peek())
+    return () => {
+      console.log("even is unmounting")
+    }
   })
-  onUnmount(() => {
-    console.log("even is unmounting")
-  })
-  return html` <div>Count is an even number! ${count.value}</div> `
+  return html` <div>Count is an even number! ${count}</div> `
 }
 
 const App = () => {
@@ -163,13 +184,14 @@ const App = () => {
     <main>
       <h1>Hello There</h1>
       <${Counter} />
-      ${() => (count.value % 2 == 0 ? html`<${OnEvans} />` : null)}
+      ${() => (count.value % 2 == 0 ? html`<${OnEvens} />` : null)}
     </main>
   `
 }
 
-render(html`<${App} />`, document.getElementById("app"))
+render(App, document.getElementById("app"))
 ```
+
 
 ## Utilities
 

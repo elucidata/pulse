@@ -15,8 +15,8 @@ declare global {
 }
 
 // Helper types
-export type PropsWithChildren = { [key: string]: any; children?: any }
-export type ComponentFunction<P = any> = (
+export type Props = { [key: string]: any }
+export type ComponentFunction<P = Props> = (
   props?: P,
   children?: any
 ) => HTMLElement | HTMLElement[] | Node | Node[]
