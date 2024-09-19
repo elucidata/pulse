@@ -176,11 +176,11 @@ const OnEvens = () => {
       console.log("even is unmounting")
     }
   })
-  return html` <div>Count is an even number! ${count}</div> `
+  return html`<div>Count is an even number! ${count}</div>`
 }
 
 const App = () => {
-  return `
+  return html`
     <main>
       <h1>Hello There</h1>
       <${Counter} />
