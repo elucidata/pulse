@@ -105,7 +105,6 @@ describe("Signals Module", () => {
       expect(observedValue).toBe(1) // Should remain unchanged
     })
 
-    // it should handle nested effects correctly
     it("should handle nested effects correctly", () => {
       const signal = new Signal(1)
       let observedValue1 = 0
@@ -127,6 +126,87 @@ describe("Signals Module", () => {
       // No need to wait for next tick
       expect(observedValue1).toBe(2)
       expect(observedValue2).toBe(2)
+    })
+
+    it("should handle nested effect cleanups correctly", () => {
+      const signal = new Signal(1)
+      let observedValue1 = 0
+      let observedValue2 = 0
+
+      const unsubscribe1 = effect(() => {
+        observedValue1 = signal.value
+
+        const unsubscribe2 = effect(() => {
+          observedValue2 = signal.value
+        })
+
+        return () => {
+          unsubscribe2()
+        }
+      })
+
+      expect(observedValue1).toBe(1)
+      expect(observedValue2).toBe(1)
+
+      signal.value = 2
+
+      // No need to wait for next tick
+      expect(observedValue1).toBe(2)
+      expect(observedValue2).toBe(2)
+
+      unsubscribe1()
+    })
+
+    it("should call nested cleanups in the correct order", () => {
+      const signal = new Signal(1)
+      let cleanupOrder = ""
+
+      const unsubscribe1 = effect(() => {
+        const unsubscribe2 = effect(() => {
+          const unsubscribe3 = effect(() => {
+            cleanupOrder += "3"
+          })
+
+          return () => {
+            cleanupOrder += "2"
+            unsubscribe3()
+          }
+        })
+
+        return () => {
+          cleanupOrder += "1"
+          unsubscribe2()
+        }
+      })
+
+      unsubscribe1()
+
+      expect(cleanupOrder).toBe("321")
+    })
+
+    it("should cleanup nested effect cleanups correctly", () => {
+      let cleanupOrder = ""
+      const disposeRoot = effect(() => {
+        // Root effect
+        effect(() => {
+          // Child 1 effect
+          effect(() => {
+            // Child 2 effect
+            return () => {
+              cleanupOrder += "2"
+            }
+          })
+          return () => {
+            cleanupOrder += "1"
+          }
+        })
+        return () => {
+          cleanupOrder += "0"
+        }
+      })
+
+      disposeRoot()
+      expect(cleanupOrder).toBe("210")
     })
 
     it("should call returned dispose function when disposed", () => {
@@ -172,7 +252,6 @@ describe("Signals Module", () => {
       expect(cleanupCalled).toBeTrue()
     })
   })
-
 
   describe("Computed", () => {
     it("should update when dependencies change", () => {
@@ -485,3 +564,27 @@ describe("Signal Subscribe Method", () => {
   //   unsubscribe2()
   // })
 })
+
+// let cleanupOrder = ""
+// const disposeRoot = effect(() => {
+//   // Root effect
+//   effect(() => {
+//     // Child 1 effect
+//     effect(() => {
+//       // Child 2 effect
+//       return () => {
+//         cleanupOrder += "2"
+//       }
+//     })
+//     return () => {
+//       cleanupOrder += "1"
+//     }
+//   })
+//   return () => {
+//     cleanupOrder += "0"
+//   }
+// })
+
+// disposeRoot()
+// // What should cleanupOrder be?
+// console.log(cleanupOrder) // 210

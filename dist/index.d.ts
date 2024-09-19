@@ -24,7 +24,9 @@ declare class Computation {
     private isRunning;
     onInnerCleanup: (() => void) | void;
     onInvalidate: (() => void) | null;
-    constructor(fn: EffectFunction);
+    parentComputation: Computation | null;
+    childComputations: Set<Computation>;
+    constructor(fn: EffectFunction, parentComputation?: Computation | null);
     run(): void;
     invalidate(): void;
     cleanup(): void;

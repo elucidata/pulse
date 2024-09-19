@@ -157,6 +157,10 @@ function reactiveChildContent(parent: Node, worker: () => any) {
   parent.appendChild(end);
 
   effect(() => {
+    // Create a cleanupFns array for this effect
+    const cleanupFns: (() => void)[] = [];
+    cleanupStack.push(cleanupFns);
+
     const value = worker();
 
     // Prepare disposer list
@@ -168,6 +172,11 @@ function reactiveChildContent(parent: Node, worker: () => any) {
     // Insert new content
     end.parentNode!.insertBefore(fragment, end);
 
+    // Now pop the cleanupStack after cleanups are done
+    // cleanupStack.pop();
+    // Do not pop the cleanupStack here?
+    // Keep it until the effect's cleanup function runs
+
     // Return a cleanup function to remove inserted nodes and dispose components on disposal
     return () => {
       // Remove inserted nodes
@@ -178,6 +187,14 @@ function reactiveChildContent(parent: Node, worker: () => any) {
 
       // Dispose components
       disposes.forEach(dispose => dispose());
+
+      // Also call cleanup functions
+      for (const fn of cleanupFns) {
+        fn();
+      }
+
+      // Now pop the cleanupStack after cleanups are done
+      cleanupStack.pop();
     };
   });
 }

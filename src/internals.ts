@@ -84,9 +84,12 @@ class Computation {
   private isRunning: boolean = false
   onInnerCleanup: (() => void) | void = void 0
   onInvalidate: (() => void) | null = null
+  parentComputation: Computation | null
+  childComputations: Set<Computation> = new Set()
 
-  constructor(fn: EffectFunction) {
+  constructor(fn: EffectFunction, parentComputation: Computation | null = null) {
     this.fn = fn
+    this.parentComputation = parentComputation
     this.run()
   }
 
@@ -99,7 +102,12 @@ class Computation {
     computationStack.push(this)
     currentComputation = this
     try {
-      this.onInnerCleanup = this.fn()
+      const result = this.fn()
+      if (typeof result === 'function') {
+        this.onInnerCleanup = result
+      } else {
+        this.onInnerCleanup = void 0
+      }
     } finally {
       computationStack.pop()
       currentComputation = computationStack[computationStack.length - 1] || null
@@ -118,12 +126,29 @@ class Computation {
   }
 
   cleanup() {
+    if (this.isRunning) {
+      return
+    }
+    this.isRunning = true
+
+    // Clean up child computations first
+    this.childComputations.forEach((child) => {
+      child.cleanup()
+    })
+    this.childComputations.clear()
+
     if (this.onInnerCleanup) {
       this.onInnerCleanup()
       this.onInnerCleanup = void 0
     }
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
     this.dependencies.clear()
+
+    // Remove this computation from its parent's childComputations
+    if (this.parentComputation) {
+      this.parentComputation.childComputations.delete(this)
+    }
+    this.isRunning = false
   }
 }
 
@@ -160,7 +185,11 @@ function signal<T>(value: T): Signal<T> {
 }
 
 function effect(fn: EffectFunction): () => void {
-  const computation = new Computation(fn)
+  const parentComputation = currentComputation
+  const computation = new Computation(fn, parentComputation)
+  if (parentComputation) {
+    parentComputation.childComputations.add(computation)
+  }
   return () => computation.cleanup()
 }
 
@@ -184,16 +213,16 @@ function batch(fn: () => void) {
 }
 
 function isObservable(value: any): boolean {
-  return typeof signal === "object" && signal !== null && "get" in signal
+  return typeof signal === 'object' && signal !== null && 'get' in signal
 }
 
 function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
   return (
-    typeof signal === "object" &&
+    typeof signal === 'object' &&
     signal !== null &&
-    "get" in signal &&
-    "peek" in signal &&
-    "subscribe" in signal
+    'get' in signal &&
+    'peek' in signal &&
+    'subscribe' in signal
   )
 }
 

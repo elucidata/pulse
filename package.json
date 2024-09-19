@@ -30,7 +30,7 @@
   },
   "scripts": {
     "dist": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --minify --external react  && bun run stats",
-    "dist:dev": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --external react  && bun run stats",
+    "dist:dev": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --external react  --no-splitting  && bun run stats",
     "stats": "echo \"all gzipped:\" && bun run stats:all",
     "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils/index.js dist/react/index.js dist/view/index.js dist/view/html.js | wc -c | numfmt --to=si",
     "prepublish": "bun run dist",
