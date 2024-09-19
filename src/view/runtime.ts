@@ -69,24 +69,10 @@ export function h(
         value(el)
       } else if (typeof value === "function") {
         // Reactive attribute
-        effect(() => {
-          const newValue = value()
-          if (newValue === false || newValue == null) {
-            el.removeAttribute(key)
-          } else {
-            el.setAttribute(key, String(newValue))
-          }
-        })
+        reactiveAttributeEffect(el, key, () => value())
       } else if (isReadonlySignal(value)) {
         // Reactive attribute using signal
-        effect(() => {
-          const newValue = value.value
-          if (newValue === false || newValue == null) {
-            el.removeAttribute(key)
-          } else {
-            el.setAttribute(key, String(newValue))
-          }
-        })
+        reactiveAttributeEffect(el, key, () => value.value)
       } else {
         el.setAttribute(key, value)
       }
@@ -108,53 +94,70 @@ export function h(
   return el
 }
 
+function reactiveAttributeEffect(el: HTMLElement, key: string, worker: () => any) {
+  effect(() => {
+    const newValue = worker()
+    if (newValue === false || newValue == null) {
+      el.removeAttribute(key)
+    } else {
+      el.setAttribute(key, String(newValue))
+    }
+  })
+}
+
 // Helper function to append children to a parent node
 export function appendChild(parent: Node, child: any): void {
   if (Array.isArray(child)) {
     child.forEach((c) => appendChild(parent, c))
   } else if (typeof child === "function") {
-    // Create boundary markers
-    let start = document.createComment("start")
-    let end = document.createComment("end")
-    parent.appendChild(start)
-    parent.appendChild(end)
-
-    effect(() => {
-      const value = child()
-
-      // Remove old content
-      const range = document.createRange()
-      range.setStartAfter(start)
-      range.setEndBefore(end)
-      range.deleteContents()
-
-      // Prepare new nodes
-      let nodes: Node[]
-      if (value instanceof Node) {
-        nodes = [value]
-      } else if (Array.isArray(value)) {
-        nodes = []
-        value.forEach((v) => {
-          const fragment = document.createDocumentFragment()
-          appendChild(fragment, v)
-          nodes.push(...Array.from(fragment.childNodes))
-        })
-      } else if (value !== null && value !== undefined) {
-        nodes = [document.createTextNode(String(value))]
-      } else {
-        nodes = []
-      }
-
-      // Insert new content
-      nodes.forEach((node) => {
-        end.parentNode!.insertBefore(node, end)
-      })
-    })
+    reactiveChildContent(parent, child, () => child())
+  } else if (isReadonlySignal(child)) {
+    reactiveChildContent(parent, child, () => child.value)
   } else if (child instanceof Node) {
     parent.appendChild(child)
   } else if (child !== null && child !== undefined) {
     parent.appendChild(document.createTextNode(String(child)))
   }
+}
+
+function reactiveChildContent(parent: Node, child: any, worker: () => any) {
+  // Create boundary markers
+  let start = document.createComment("start")
+  let end = document.createComment("end")
+  parent.appendChild(start)
+  parent.appendChild(end)
+
+  effect(() => {
+    const value = worker()
+
+    // Remove old content
+    const range = document.createRange()
+    range.setStartAfter(start)
+    range.setEndBefore(end)
+    range.deleteContents()
+
+    // Prepare new nodes
+    let nodes: Node[]
+    if (value instanceof Node) {
+      nodes = [value]
+    } else if (Array.isArray(value)) {
+      nodes = []
+      value.forEach((v) => {
+        const fragment = document.createDocumentFragment()
+        appendChild(fragment, v)
+        nodes.push(...Array.from(fragment.childNodes))
+      })
+    } else if (value !== null && value !== undefined) {
+      nodes = [document.createTextNode(String(value))]
+    } else {
+      nodes = []
+    }
+
+    // Insert new content
+    nodes.forEach((node) => {
+      end.parentNode!.insertBefore(node, end)
+    })
+  })
 }
 
 // Component creation with context and cleanup management
