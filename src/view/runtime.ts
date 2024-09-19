@@ -159,19 +159,14 @@ function reactiveChildContent(parent: Node, worker: () => any) {
   effect(() => {
     const value = worker();
 
-    console.log("new child content value:", value);
-
-    // Prepare new nodes and disposes
-    let nodes: Node[] = [];
+    // Prepare disposer list
     let disposes: (() => void)[] = [];
 
     const fragment = document.createDocumentFragment();
     appendChild(fragment, value, disposes);
-    nodes = Array.from(fragment.childNodes);
 
     // Insert new content
     end.parentNode!.insertBefore(fragment, end);
-    console.log("new child content nodes:", nodes);
 
     // Return a cleanup function to remove inserted nodes and dispose components on disposal
     return () => {
@@ -238,55 +233,6 @@ export function createComponent(
   }
 
   return { node: fragment, dispose }
-
-  
-  // const contextMap = new Map()
-  // contextStack.push(contextMap)
-
-  // const cleanupFns: (() => void)[] = []
-
-  // // Capture the parent's cleanup functions
-  // const parentCleanupFns = cleanupStack[cleanupStack.length - 1]
-
-  // cleanupStack.push(cleanupFns)
-
-  // const result = component(props, children)
-
-  // let el: Node
-
-  // if (Array.isArray(result)) {
-  //   const fragment = document.createDocumentFragment()
-  //   result.forEach((node) => {
-  //     appendChild(fragment, node)
-  //   })
-  //   el = fragment
-  // } else if (result instanceof Node) {
-  //   el = result
-  // } else if (result !== null && result !== undefined) {
-  //   el = document.createTextNode(String(result))
-  // } else {
-  //   el = document.createComment("")
-  // }
-
-  // let isDisposed = false
-  // const dispose = () => {
-  //   if (isDisposed) {
-  //     return console.warn("Component already unmounted")
-  //   }
-  //   for (const fn of cleanupFns) {
-  //     fn()
-  //   }
-  //   contextStack.pop()
-  //   cleanupStack.pop()
-  //   isDisposed = true
-  // }
-
-  // // Add the dispose function to the parent's cleanup functions
-  // if (parentCleanupFns) {
-  //   parentCleanupFns.push(dispose)
-  // }
-
-  // return { node: el, dispose }
 }
 
 // Render function to mount components
@@ -294,10 +240,13 @@ export function render(component: ComponentFunction, container: HTMLElement) {
   const { node, dispose } = createComponent(component, null, [])
   const startMarker = document.createComment('start of component')
   const endMarker = document.createComment('end of component')
+
   container.appendChild(startMarker)
   container.appendChild(node)
   container.appendChild(endMarker)
+  
   let isDisposed = false
+
   return () => {
     if (isDisposed) {
       return console.warn("Render root already unmounted")
@@ -311,22 +260,4 @@ export function render(component: ComponentFunction, container: HTMLElement) {
     dispose()
     isDisposed = true
   }
-
-
-  // const { node: fragment, dispose } = createComponent(component, null, [])
-  // const nodes = Array.from(fragment.childNodes)
-  // container.appendChild(fragment)
-  // let isDisposed = false
-  // return () => {
-  //   if (isDisposed) {
-  //     return console.warn("Render root already unmounted")
-  //   }
-  //   nodes.forEach((node) => {
-  //     if (container.contains(node)) {
-  //       container.removeChild(node)
-  //     }
-  //   })
-  //   dispose()
-  //   isDisposed = true
-  // }
 }

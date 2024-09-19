@@ -119,9 +119,6 @@ class Computation {
 
   cleanup() {
     if (this.onInnerCleanup) {
-      console.groupCollapsed("effect cleanup")
-      console.log("src", this.fn)
-      console.groupEnd()
       this.onInnerCleanup()
       this.onInnerCleanup = void 0
     }

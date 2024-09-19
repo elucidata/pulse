@@ -71,19 +71,18 @@ describe("View", () => {
     })
   })
 
-  // describe("JSX-compatible createElement function", () => {
-  //   it("should create an node with the result of the props and children", () => {
-  //     const el = h("div", { id: "test", style: { color: "red" } }, "child")
+  describe("JSX-compatible createElement function", () => {
+    it("should create an node with the result of the props and children", () => {
+      const el = h("div", { id: "test", style: { color: "red" } }, "child")
 
-  //   })
+    })
 
-  //   it("should create a component function", () => {
-  //     const Component = (props: any) => h("span", null, props.text)
-  //     const el = h(Component, { text: "Hello" })
-  //     expect(el.tagName).toBe("SPAN")
-  //     expect(el.textContent).toBe("Hello")
-  //   })
-  // })
+    it("should create a component function", () => {
+      const Component = (props: any) => h("span", null, props.text)
+      const el = h(Component, { text: "Hello" })
+      expect(el.textContent).toBe("Hello")
+    })
+  })
 
   describe("Helper function to append children", () => {
     it("should append various types of children", () => {
@@ -100,13 +99,8 @@ describe("View", () => {
       const Component = () => h("div", null)
       const {node:fragment} = createComponent(Component, null, [])
 
-      console.log("fragment", typeof fragment, fragment instanceof Node, fragment.childNodes.length)
-
       expect(fragment instanceof Node).toBe(true)
       expect(fragment.childNodes.length).toBe(1)
-      // expect first child to be a comment
-      // expect(fragment.childNodes[0].nodeType).toBe(8)
-      // expect second child to be a div
       expect((fragment.childNodes[0] as HTMLElement)?.tagName).toBe("DIV")
 
       expect(contextStack.length).toBe(1)
@@ -123,7 +117,7 @@ describe("View", () => {
       expect(container.childNodes.length).toBe(3) // the comment and the boundary comments
       expect(container.childNodes[1]?.textContent).toBe("content")
 
-      unmount() // is now throwing an error
+      unmount() 
       expect(container.childNodes.length).toBe(0)
     })
   })
