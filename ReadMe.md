@@ -11,7 +11,6 @@ No need to worry about tracking dependencies in your computed values or effectsâ
 At its core it's a simple API:
 
 ```ts
-
 declare function signal<T>(value: T): Signal<T>;
 declare function effect(fn: EffectFunction): () => void;
 declare function computed<T>(fn: () => T): ReadonlySignal<T>;
