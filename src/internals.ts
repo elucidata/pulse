@@ -82,6 +82,7 @@ class Computation {
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
   private isRunning: boolean = false
+  private isCleaning: boolean = false
   onInnerCleanup: (() => void) | void = void 0
   onInvalidate: (() => void) | null = null
   parentComputation: Computation | null
@@ -97,11 +98,11 @@ class Computation {
     if (this.isRunning) {
       return
     }
-    this.isRunning = true
     this.cleanup()
     computationStack.push(this)
     currentComputation = this
     try {
+      this.isRunning = true
       const result = this.fn()
       if (typeof result === 'function') {
         this.onInnerCleanup = result
@@ -109,9 +110,9 @@ class Computation {
         this.onInnerCleanup = void 0
       }
     } finally {
+      this.isRunning = false
       computationStack.pop()
       currentComputation = computationStack[computationStack.length - 1] || null
-      this.isRunning = false
     }
   }
 
@@ -126,10 +127,10 @@ class Computation {
   }
 
   cleanup() {
-    if (this.isRunning) {
+    if (this.isCleaning) {
       return
     }
-    this.isRunning = true
+    this.isCleaning = true
 
     // Clean up child computations first
     this.childComputations.forEach((child) => {
@@ -148,7 +149,7 @@ class Computation {
     if (this.parentComputation) {
       this.parentComputation.childComputations.delete(this)
     }
-    this.isRunning = false
+    this.isCleaning = false
   }
 }
 
