@@ -98,7 +98,7 @@ describe("View", () => {
   describe("Component creation with context and cleanup management", () => {
     it("should create a component and manage context and cleanup", () => {
       const Component = () => h("div", null)
-      const fragment = createComponent(Component, null, [])
+      const {node:fragment} = createComponent(Component, null, [])
 
       expect(fragment instanceof Node).toBe(true)
       expect(fragment.childNodes.length).toBe(2)

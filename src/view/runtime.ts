@@ -43,7 +43,6 @@ export function onUnmount(fn: () => void) {
 }
 
 // JSX-compatible createElement function
-// Updated h function
 export function h(
   tag: string | ComponentFunction,
   props: PropsWithChildren | null,
@@ -51,7 +50,8 @@ export function h(
 ): Node {
   if (typeof tag === "function") {
     // Component function
-    return createComponent(tag, props, children)
+    const { node } = createComponent(tag, props, children)
+    return node
   }
 
   const el = document.createElement(tag)
@@ -74,7 +74,7 @@ export function h(
         // Reactive attribute using signal
         reactiveAttributeEffect(el, key, () => value.value)
       } else {
-        el.setAttribute(key, value)
+        el.setAttribute(key, value as any)
       }
     }
   }
@@ -94,7 +94,11 @@ export function h(
   return el
 }
 
-function reactiveAttributeEffect(el: HTMLElement, key: string, worker: () => any) {
+function reactiveAttributeEffect(
+  el: HTMLElement,
+  key: string,
+  worker: () => any
+) {
   effect(() => {
     const newValue = worker()
     if (newValue === false || newValue == null) {
@@ -113,6 +117,19 @@ export function appendChild(parent: Node, child: any): void {
     reactiveChildContent(parent, child, () => child())
   } else if (isReadonlySignal(child)) {
     reactiveChildContent(parent, child, () => child.value)
+  } else if (
+    child &&
+    typeof child === "object" &&
+    "node" in child &&
+    "dispose" in child
+  ) {
+    // Child is a component object
+    parent.appendChild(child.node)
+
+    // Add the dispose function to the current cleanup stack
+    if (cleanupStack.length > 0) {
+      cleanupStack[cleanupStack.length - 1]?.push(child.dispose)
+    }
   } else if (child instanceof Node) {
     parent.appendChild(child)
   } else if (child !== null && child !== undefined) {
@@ -165,10 +182,15 @@ export function createComponent(
   component: ComponentFunction,
   props: any,
   children: any[]
-): Node {
+): { node: Node; dispose: () => void } {
   const contextMap = new Map()
   contextStack.push(contextMap)
+
   const cleanupFns: (() => void)[] = []
+
+  // Capture the parent's cleanup functions
+  const parentCleanupFns = cleanupStack[cleanupStack.length - 1]
+
   cleanupStack.push(cleanupFns)
 
   const result = component(props, children)
@@ -189,25 +211,19 @@ export function createComponent(
     el = document.createComment("")
   }
 
-  // Since we might have multiple nodes, we use a placeholder comment to track them
+  // Placeholder comment to track component's position in the DOM
   const placeholder = document.createComment("")
 
-  // We'll wrap everything in a fragment including the placeholder
   const wrapper = document.createDocumentFragment()
   wrapper.appendChild(placeholder)
   wrapper.appendChild(el)
 
-  // Remove context and cleanup functions when the component is unmounted
+  // MutationObserver to detect unmounting
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       mutation.removedNodes.forEach((removedNode) => {
         if (removedNode === placeholder) {
-          observer.disconnect()
-          for (const fn of cleanupFns) {
-            fn()
-          }
-          contextStack.pop()
-          cleanupStack.pop()
+          dispose()
         }
       })
     }
@@ -219,19 +235,39 @@ export function createComponent(
     }
   })
 
-  return wrapper
+  const dispose = () => {
+    observer.disconnect()
+    for (const fn of cleanupFns) {
+      fn()
+    }
+    contextStack.pop()
+    cleanupStack.pop()
+  }
+
+  // Add the dispose function to the parent's cleanup functions
+  if (parentCleanupFns) {
+    parentCleanupFns.push(dispose)
+  }
+
+  return { node: wrapper, dispose }
 }
 
 // Render function to mount components
 export function render(component: ComponentFunction, container: HTMLElement) {
-  const fragment = createComponent(component, null, [])
+  const { node: fragment, dispose } = createComponent(component, null, [])
   const nodes = Array.from(fragment.childNodes)
   container.appendChild(fragment)
+  let isDisposed = false
   return () => {
+    if (isDisposed) {
+      return console.warn("Component already unmounted")
+    }
     nodes.forEach((node) => {
       if (container.contains(node)) {
         container.removeChild(node)
       }
+      dispose()
+      isDisposed = true
     })
   }
 }
