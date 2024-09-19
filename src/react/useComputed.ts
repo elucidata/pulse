@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Computation } from "../internals"
 
-function useComputed<T>(computeFn: () => T): T {
+export function useComputed<T>(computeFn: () => T): T {
   const [value, setValue] = useState<T>(() => computeFn())
   const computeFnRef = useRef(computeFn)
 
@@ -26,5 +26,3 @@ function useComputed<T>(computeFn: () => T): T {
 
   return value
 }
-
-export { useComputed }

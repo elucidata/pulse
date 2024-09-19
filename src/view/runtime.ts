@@ -1,10 +1,14 @@
-import { effect as baseEffect, EffectFunction, isReadonlySignal } from "../internals"
+import {
+  effect as baseEffect,
+  EffectFunction,
+  isReadonlySignal,
+} from "../internals"
 import { ComponentFunction, PropsWithChildren } from "./types"
 
 export function effect(fn: EffectFunction): void {
-  const dispose = baseEffect(fn);
+  const dispose = baseEffect(fn)
   if (cleanupStack.length > 0) {
-    cleanupStack[cleanupStack.length - 1]?.push(dispose);
+    cleanupStack[cleanupStack.length - 1]?.push(dispose)
   }
 }
 
@@ -101,24 +105,32 @@ export function h(
   return el
 }
 
-function reactiveAttributeEffect(el: HTMLElement, key: string, worker: () => any) {
+function reactiveAttributeEffect(
+  el: HTMLElement,
+  key: string,
+  worker: () => any
+) {
   effect(() => {
-    const newValue = worker();
+    const newValue = worker()
     if (newValue === false || newValue == null) {
-      el.removeAttribute(key);
+      el.removeAttribute(key)
     } else {
-      el.setAttribute(key, String(newValue));
+      el.setAttribute(key, String(newValue))
     }
 
     // Return a cleanup function to remove the attribute on disposal
     return () => {
-      el.removeAttribute(key);
-    };
-  });
+      el.removeAttribute(key)
+    }
+  })
 }
 
 // Helper function to append children to a parent node
-export function appendChild(parent: Node, child: any, disposes?: (() => void)[]): void {
+export function appendChild(
+  parent: Node,
+  child: any,
+  disposes?: (() => void)[]
+): void {
   if (Array.isArray(child)) {
     child.forEach((c) => appendChild(parent, c, disposes))
   } else if (typeof child === "function") {
@@ -151,26 +163,26 @@ export function appendChild(parent: Node, child: any, disposes?: (() => void)[])
 
 function reactiveChildContent(parent: Node, worker: () => any) {
   // Create boundary markers
-  let start = document.createComment("start");
-  let end = document.createComment("end");
-  parent.appendChild(start);
-  parent.appendChild(end);
+  let start = document.createComment("start")
+  let end = document.createComment("end")
+  parent.appendChild(start)
+  parent.appendChild(end)
 
   effect(() => {
     // Create a cleanupFns array for this effect
-    const cleanupFns: (() => void)[] = [];
-    cleanupStack.push(cleanupFns);
+    const cleanupFns: (() => void)[] = []
+    cleanupStack.push(cleanupFns)
 
-    const value = worker();
+    const value = worker()
 
     // Prepare disposer list
-    let disposes: (() => void)[] = [];
+    let disposes: (() => void)[] = []
 
-    const fragment = document.createDocumentFragment();
-    appendChild(fragment, value, disposes);
+    const fragment = document.createDocumentFragment()
+    appendChild(fragment, value, disposes)
 
     // Insert new content
-    end.parentNode!.insertBefore(fragment, end);
+    end.parentNode!.insertBefore(fragment, end)
 
     // Now pop the cleanupStack after cleanups are done
     // cleanupStack.pop();
@@ -180,23 +192,23 @@ function reactiveChildContent(parent: Node, worker: () => any) {
     // Return a cleanup function to remove inserted nodes and dispose components on disposal
     return () => {
       // Remove inserted nodes
-      const range = document.createRange();
-      range.setStartAfter(start);
-      range.setEndBefore(end);
-      range.deleteContents();
+      const range = document.createRange()
+      range.setStartAfter(start)
+      range.setEndBefore(end)
+      range.deleteContents()
 
       // Dispose components
-      disposes.forEach(dispose => dispose());
+      disposes.forEach((dispose) => dispose())
 
       // Also call cleanup functions
       for (const fn of cleanupFns) {
-        fn();
+        fn()
       }
 
       // Now pop the cleanupStack after cleanups are done
-      cleanupStack.pop();
-    };
-  });
+      cleanupStack.pop()
+    }
+  })
 }
 
 // Component creation with context and cleanup management
@@ -255,13 +267,13 @@ export function createComponent(
 // Render function to mount components
 export function render(component: ComponentFunction, container: HTMLElement) {
   const { node, dispose } = createComponent(component, null, [])
-  const startMarker = document.createComment('start of component')
-  const endMarker = document.createComment('end of component')
+  const startMarker = document.createComment("start of component")
+  const endMarker = document.createComment("end of component")
 
   container.appendChild(startMarker)
   container.appendChild(node)
   container.appendChild(endMarker)
-  
+
   let isDisposed = false
 
   return () => {

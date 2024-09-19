@@ -19,7 +19,8 @@ declare class Signal<T> implements ReadonlySignal<T> {
     subscribe(run: (value: T) => void): () => void;
 }
 declare class Computation {
-    id: number;
+    static lastId: number;
+    readonly id: number;
     fn: EffectFunction;
     dependencies: Set<Signal<any>>;
     private isRunning;
@@ -32,6 +33,10 @@ declare class Computation {
     run(): void;
     invalidate(): void;
     cleanup(clearFromParent?: boolean): void;
+    static current: Computation | null;
+    static stack: Computation[];
+    static isBatching: boolean;
+    static pending: Set<Computation>;
 }
 declare function signal<T>(value: T): Signal<T>;
 declare function effect(fn: EffectFunction): () => void;

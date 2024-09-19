@@ -1,5 +1,5 @@
-import { describe, it, expect, test } from "bun:test"
-import { Signal, effect, computed, batch, getCurrentComputationId, getCurrentComputation } from "./internals"
+import { describe, expect, it } from "bun:test"
+import { Signal, batch, computed, effect } from "./internals"
 
 describe("Signals Module", () => {
   describe("Signal", () => {
@@ -263,10 +263,9 @@ describe("Signals Module", () => {
       const unsubscribe = effect(() => {
         observedValueA = signalA.value
 
-        
         effect(() => {
           observedValueB = signalB.value
-          
+
           return () => {
             nestedCleanupCalled++
           }

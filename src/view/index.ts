@@ -1,11 +1,11 @@
 export * from "../index"
-export type * from "./types"
+export { html } from "./html"
 export {
-  h,
   getContext,
-  setContext,
+  h,
   onMount,
   onUnmount,
   render,
+  setContext,
 } from "./runtime"
-export { html } from "./html"
+export type * from "./types"

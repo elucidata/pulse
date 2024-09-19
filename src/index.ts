@@ -1,1 +1,1 @@
-export { signal, effect, computed, batch, Signal } from "./internals"
+export { Signal, batch, computed, effect, signal } from "./internals"

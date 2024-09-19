@@ -1,29 +1,13 @@
 export type EffectFunction = () => void | (() => void)
 
-let currentComputation: Computation | null = null
-
-function getCurrentComputation(): Computation | null {
-  return currentComputation
-}
-
-function setCurrentComputation(comp: Computation | null) {
-  currentComputation = comp
-}
-
-const computationStack: Computation[] = []
-
-// Batching variables
-let isBatching = false
-const pendingComputations = new Set<Computation>()
-
-interface ReadonlySignal<T> {
+export interface ReadonlySignal<T> {
   readonly value: T
   get(): T
   peek(): T
   subscribe(run: (value: T) => void): () => void
 }
 
-class Signal<T> implements ReadonlySignal<T> {
+export class Signal<T> implements ReadonlySignal<T> {
   private _value: T
   private subscribers: Set<(value: T) => void> = new Set()
   dependents: Set<Computation> = new Set()
@@ -33,9 +17,9 @@ class Signal<T> implements ReadonlySignal<T> {
   }
 
   get value(): T {
-    if (currentComputation) {
-      this.dependents.add(currentComputation)
-      currentComputation.dependencies.add(this)
+    if (Computation.current) {
+      this.dependents.add(Computation.current)
+      Computation.current.dependencies.add(this)
     }
     return this._value
   }
@@ -43,8 +27,7 @@ class Signal<T> implements ReadonlySignal<T> {
   set value(newValue: T) {
     if (this._value !== newValue) {
       this._value = newValue
-      // Notify dependents
-      const dependents = new Set(this.dependents)
+      const dependents = Array.from(this.dependents)
       dependents.forEach((dep) => dep.invalidate())
       this.subscribers.forEach((subscriber) => subscriber(newValue))
     }
@@ -65,27 +48,19 @@ class Signal<T> implements ReadonlySignal<T> {
 
   // Add the subscribe method to conform to Svelte's store interface
   subscribe(run: (value: T) => void): () => void {
-    // Immediately call the subscriber with the current value
     run(this._value)
-
-    // Add the subscriber to the set
     this.subscribers.add(run)
 
-    // Return the unsubscribe function
     return () => {
       this.subscribers.delete(run)
     }
   }
 }
 
-let nextID = 1
+export class Computation {
+  static lastId = 0
 
-export function getCurrentComputationId() {
-  return currentComputation?.id
-}
-
-class Computation {
-  id = nextID++
+  readonly id = Computation.lastId++
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
   private isRunning: boolean = false
@@ -95,7 +70,10 @@ class Computation {
   parentComputation: Computation | null
   childComputations: Set<Computation> = new Set()
 
-  constructor(fn: EffectFunction, parentComputation: Computation | null = null) {
+  constructor(
+    fn: EffectFunction,
+    parentComputation: Computation | null = null
+  ) {
     this.fn = fn
     this.parentComputation = parentComputation
     this.run()
@@ -106,27 +84,28 @@ class Computation {
       return
     }
     this.cleanup(false)
-    computationStack.push(this)
-    currentComputation = this
+    Computation.stack.push(this)
+    Computation.current = this
     try {
       this.isRunning = true
       const result = this.fn()
 
-      if (typeof result === 'function') {
+      if (typeof result === "function") {
         this.onInnerCleanup = result
       } else {
         this.onInnerCleanup = void 0
       }
     } finally {
       this.isRunning = false
-      computationStack.pop()
-      currentComputation = computationStack[computationStack.length - 1] || null
+      Computation.stack.pop()
+      Computation.current =
+        Computation.stack[Computation.stack.length - 1] || null
     }
   }
 
   invalidate() {
-    if (isBatching) {
-      pendingComputations.add(this)
+    if (Computation.isBatching) {
+      Computation.pending.add(this)
     } else if (this.onInvalidate) {
       this.onInvalidate()
     } else {
@@ -136,11 +115,10 @@ class Computation {
 
   cleanup(clearFromParent = true) {
     if (this.isCleaning) {
-      return 
+      return
     }
     this.isCleaning = true
 
-    // Clean up child computations first
     Array.from(this.childComputations).forEach((child) => {
       child.cleanup()
     })
@@ -153,15 +131,19 @@ class Computation {
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
     this.dependencies.clear()
 
-    // Remove this computation from its parent's childComputations
     if (this.parentComputation && clearFromParent) {
       this.parentComputation.childComputations.delete(this)
     }
     this.isCleaning = false
   }
+
+  static current: Computation | null = null
+  static stack: Computation[] = []
+  static isBatching = false
+  static pending = new Set<Computation>()
 }
 
-class ComputedSignal<T> implements ReadonlySignal<T> {
+export class ComputedSignal<T> implements ReadonlySignal<T> {
   private signal: Signal<T>
   cleanup: () => void
 
@@ -189,12 +171,12 @@ class ComputedSignal<T> implements ReadonlySignal<T> {
   }
 }
 
-function signal<T>(value: T): Signal<T> {
+export function signal<T>(value: T): Signal<T> {
   return new Signal(value)
 }
 
-function effect(fn: EffectFunction): () => void {
-  const parentComputation = currentComputation
+export function effect(fn: EffectFunction): () => void {
+  const parentComputation = Computation.current
   const computation = new Computation(fn, parentComputation)
   if (parentComputation) {
     parentComputation.childComputations.add(computation)
@@ -202,49 +184,35 @@ function effect(fn: EffectFunction): () => void {
   return () => computation.cleanup()
 }
 
-function computed<T>(fn: () => T): ReadonlySignal<T> {
+export function computed<T>(fn: () => T): ReadonlySignal<T> {
   return new ComputedSignal(fn)
 }
 
-function batch(fn: () => void) {
-  const prevBatching = isBatching
-  isBatching = true
+export function batch(fn: () => void) {
+  const prevBatching = Computation.isBatching
+  Computation.isBatching = true
   try {
     fn()
   } finally {
-    isBatching = prevBatching
-    if (!isBatching) {
-      const computationsToRun = Array.from(pendingComputations)
-      pendingComputations.clear()
+    Computation.isBatching = prevBatching
+    if (!Computation.isBatching) {
+      const computationsToRun = Array.from(Computation.pending)
+      Computation.pending.clear()
       computationsToRun.forEach((comp) => comp.run())
     }
   }
 }
 
-function isObservable(value: any): boolean {
-  return typeof signal === 'object' && signal !== null && 'get' in signal
+export function isObservable(value: any): boolean {
+  return typeof signal === "object" && signal !== null && "get" in signal
 }
 
-function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
+export function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
   return (
-    typeof signal === 'object' &&
+    typeof signal === "object" &&
     signal !== null &&
-    'get' in signal &&
-    'peek' in signal &&
-    'subscribe' in signal
+    "get" in signal &&
+    "peek" in signal &&
+    "subscribe" in signal
   )
-}
-
-export {
-  Signal,
-  ReadonlySignal,
-  Computation,
-  signal,
-  effect,
-  computed,
-  batch,
-  getCurrentComputation,
-  setCurrentComputation,
-  isReadonlySignal,
-  isObservable,
 }

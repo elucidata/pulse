@@ -1,11 +1,7 @@
 import * as React from "react"
-import {
-  Computation,
-  getCurrentComputation,
-  setCurrentComputation,
-} from "../internals"
+import { Computation } from "../internals"
 
-function observer<P>(Component: React.FC<P>): React.FC<P> {
+export function observer<P>(Component: React.FC<P>): React.FC<P> {
   return function ObserverComponent(props: P) {
     const [, setVersion] = React.useState(0)
 
@@ -27,17 +23,15 @@ function observer<P>(Component: React.FC<P>): React.FC<P> {
     let renderResult: React.ReactElement | React.ReactNode | null = null
 
     // Use getter and setter instead of direct assignment
-    const prevComputation = getCurrentComputation()
-    setCurrentComputation(computationRef.current)
+    const prevComputation = Computation.current
+    Computation.current = computationRef.current
 
     try {
       renderResult = Component(props)
     } finally {
-      setCurrentComputation(prevComputation)
+      Computation.current = prevComputation
     }
 
     return renderResult
   }
 }
-
-export { observer }

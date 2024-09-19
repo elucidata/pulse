@@ -1,6 +1,6 @@
 export {
-  persistedSignal,
   IStorage,
   PersistedSignalOptions,
+  persistedSignal,
 } from "./persistedSignal"
-export { update, Merger, Updater } from "./update"
+export { Merger, Updater, update } from "./update"
