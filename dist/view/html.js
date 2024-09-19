@@ -1,1 +1,1 @@
-import{g as a}from"../chunk-LGWIKELI.js";import"../chunk-XBDAQS5M.js";export{a as html};
+import{g as a}from"../chunk-OQJ24JMF.js";import"../chunk-G46YZ25X.js";export{a as html};

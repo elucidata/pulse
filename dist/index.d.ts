@@ -7,7 +7,7 @@ interface ReadonlySignal<T> {
 }
 declare class Signal<T> implements ReadonlySignal<T> {
     private _value;
-    private subscribers;
+    private subscribers?;
     dependents: Set<Computation>;
     constructor(value: T);
     get value(): T;

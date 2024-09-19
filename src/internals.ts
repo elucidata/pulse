@@ -9,7 +9,7 @@ export interface ReadonlySignal<T> {
 
 export class Signal<T> implements ReadonlySignal<T> {
   private _value: T
-  private subscribers: Set<(value: T) => void> = new Set()
+  private subscribers?: Set<(value: T) => void>
   dependents: Set<Computation> = new Set()
 
   constructor(value: T) {
@@ -29,7 +29,7 @@ export class Signal<T> implements ReadonlySignal<T> {
       this._value = newValue
       const dependents = Array.from(this.dependents)
       dependents.forEach((dep) => dep.invalidate())
-      this.subscribers.forEach((subscriber) => subscriber(newValue))
+      this.subscribers?.forEach((subscriber) => subscriber(newValue))
     }
   }
 
@@ -49,10 +49,13 @@ export class Signal<T> implements ReadonlySignal<T> {
   // Add the subscribe method to conform to Svelte's store interface
   subscribe(run: (value: T) => void): () => void {
     run(this._value)
+    if (!this.subscribers) {
+      this.subscribers = new Set()
+    }
     this.subscribers.add(run)
 
     return () => {
-      this.subscribers.delete(run)
+      this.subscribers!.delete(run)
     }
   }
 }
