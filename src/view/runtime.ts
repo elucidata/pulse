@@ -1,4 +1,4 @@
-import { effect } from "../internals"
+import { effect, isReadonlySignal } from "../internals"
 import { ComponentFunction, PropsWithChildren } from "./types"
 
 // Context system
@@ -43,6 +43,7 @@ export function onUnmount(fn: () => void) {
 }
 
 // JSX-compatible createElement function
+// Updated h function
 export function h(
   tag: string | ComponentFunction,
   props: PropsWithChildren | null,
@@ -66,6 +67,26 @@ export function h(
         Object.assign(el.style, value)
       } else if (key === "use" && typeof value === "function") {
         value(el)
+      } else if (typeof value === "function") {
+        // Reactive attribute
+        effect(() => {
+          const newValue = value()
+          if (newValue === false || newValue == null) {
+            el.removeAttribute(key)
+          } else {
+            el.setAttribute(key, String(newValue))
+          }
+        })
+      } else if (isReadonlySignal(value)) {
+        // Reactive attribute using signal
+        effect(() => {
+          const newValue = value.value
+          if (newValue === false || newValue == null) {
+            el.removeAttribute(key)
+          } else {
+            el.setAttribute(key, String(newValue))
+          }
+        })
       } else {
         el.setAttribute(key, value)
       }
