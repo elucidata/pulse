@@ -16,8 +16,8 @@ declare global {
 type Props = {
     [key: string]: any;
 };
-type ComponentFunction<P = Props> = (props?: P, children?: any) => HTMLElement | HTMLElement[] | Node | Node[];
-type ComponentProps<F> = F extends ComponentFunction<infer P> ? P : never;
+type ComponentFunction<P = Props> = (props?: P, children?: any) => Node | Node[];
+type ExtractComponentProps<F> = F extends ComponentFunction<infer P> ? P : never;
 
 declare function setContext(key: any, value: any): void;
 declare function getContext<T>(key: any): T;
@@ -26,4 +26,4 @@ declare function onUnmount(fn: () => void): void;
 declare function h(tag: string | ComponentFunction, props: Props | null, ...children: any[]): Node;
 declare function render(component: ComponentFunction, container: HTMLElement): () => void;
 
-export { type ComponentFunction, type ComponentProps, type Props, getContext, h, onMount, onUnmount, render, setContext };
+export { type ComponentFunction, type ExtractComponentProps, type Props, getContext, h, onMount, onUnmount, render, setContext };

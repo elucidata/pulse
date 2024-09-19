@@ -135,14 +135,14 @@ Signals comply with Svelte's store contract:
 
 ## PulseView (Experimental)
 
-Provides a tiny experimental view engine you can optionally include and play with... Feedback welcome. PulseView is closer to solid-js than preact. Components are rendered only once, and update based on signal changes. Plays well with `htm`.
+Included is a tiny experimental view engine you can play with... Feedback welcome. PulseView is closer to a stripped down solid-js than preact. Components are rendered only once, and updated based on signal changes. Plays well with `htm`.
 
-Contains the usual suspects:
+The API contains the usual suspects:
 
 ```ts
 type Props = { [key: string]: any; };
 type ComponentFunction<P = Props> = (props?: P, children?: any) => HTMLElement | HTMLElement[] | Node | Node[];
-type ComponentProps<F> = F extends ComponentFunction<infer P> ? P : never;
+type ExtractComponentProps<F> = F extends ComponentFunction<infer P> ? P : never;
 
 declare function h(tag: string | ComponentFunction, props: Props | null, ...children: any[]): Node;
 declare const html: (strings: TemplateStringsArray, ...values: any[]) => Node | Node[];
@@ -156,6 +156,8 @@ declare function render(component: ComponentFunction, container: HTMLElement): (
 ```
 
 ### Demo Usage
+
+Requires `htm` package to use template literals, otherwise us the `h` function (can be used with JSX/TSX too, if you like).
 
 ```ts
 import { signal, html, render } from "@elucidata/pulse/view"

@@ -19,7 +19,9 @@ export type Props = { [key: string]: any }
 export type ComponentFunction<P = Props> = (
   props?: P,
   children?: any
-) => HTMLElement | HTMLElement[] | Node | Node[]
+) => Node | Node[]
 
 // Helper type to extract the props of a component function
-export type ComponentProps<F> = F extends ComponentFunction<infer P> ? P : never
+export type ExtractComponentProps<F> = F extends ComponentFunction<infer P>
+  ? P
+  : never

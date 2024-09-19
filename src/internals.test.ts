@@ -98,7 +98,8 @@ describe("Signals Module", () => {
 
       expect(observedValue).toBe(1) // Should remain unchanged
     })
-
+  })
+  describe("Effect Nesting", () => {
     it("should handle nested effects correctly", () => {
       const signal = new Signal(1)
       let observedValue1 = 0
