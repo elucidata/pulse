@@ -21,7 +21,7 @@ type ComponentFunction = (props?: any, children?: any) => HTMLElement | HTMLElem
 
 declare function setContext(key: any, value: any): void;
 declare function getContext<T>(key: any): T;
-declare function onMount(fn: () => void): void;
+declare function onMount(fn: () => void | (() => void)): void;
 declare function onUnmount(fn: () => void): void;
 declare function h(tag: string | ComponentFunction, props: PropsWithChildren | null, ...children: any[]): Node;
 declare function render(component: ComponentFunction, container: HTMLElement): () => void;

@@ -177,6 +177,20 @@ function batch(fn: () => void) {
   }
 }
 
+function isObservable(value: any): boolean {
+  return typeof signal === "object" && signal !== null && "get" in signal
+}
+
+function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
+  return (
+    typeof signal === "object" &&
+    signal !== null &&
+    "get" in signal &&
+    "peek" in signal &&
+    "subscribe" in signal
+  )
+}
+
 export {
   Signal,
   ReadonlySignal,
@@ -187,4 +201,6 @@ export {
   batch,
   getCurrentComputation,
   setCurrentComputation,
+  isReadonlySignal,
+  isObservable,
 }

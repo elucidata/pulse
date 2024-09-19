@@ -26,7 +26,13 @@ function onMount(fn) {
   if (cleanupStack.length === 0) {
     throw new Error("onMount must be called within a component");
   }
-  queueMicrotask(fn);
+  const handler = () => {
+    const unmount = fn();
+    if (unmount) {
+      onUnmount(unmount);
+    }
+  };
+  queueMicrotask(handler);
 }
 function onUnmount(fn) {
   if (cleanupStack.length === 0) {
@@ -66,26 +72,34 @@ function appendChild(parent, child) {
   if (Array.isArray(child)) {
     child.forEach((c) => appendChild(parent, c));
   } else if (typeof child === "function") {
-    let node = document.createComment("");
-    parent.appendChild(node);
+    let start = document.createComment("start");
+    let end = document.createComment("end");
+    parent.appendChild(start);
+    parent.appendChild(end);
     effect(() => {
       const value = child();
-      let newNode;
+      const range = document.createRange();
+      range.setStartAfter(start);
+      range.setEndBefore(end);
+      range.deleteContents();
+      let nodes;
       if (value instanceof Node) {
-        newNode = value;
+        nodes = [value];
       } else if (Array.isArray(value)) {
-        const fragment = document.createDocumentFragment();
+        nodes = [];
         value.forEach((v) => {
+          const fragment = document.createDocumentFragment();
           appendChild(fragment, v);
+          nodes.push(...Array.from(fragment.childNodes));
         });
-        newNode = fragment;
+      } else if (value !== null && value !== void 0) {
+        nodes = [document.createTextNode(String(value))];
       } else {
-        newNode = document.createTextNode(String(value));
+        nodes = [];
       }
-      if (node.parentNode) {
-        node.parentNode.replaceChild(newNode, node);
-      }
-      node = newNode;
+      nodes.forEach((node) => {
+        end.parentNode.insertBefore(node, end);
+      });
     });
   } else if (child instanceof Node) {
     parent.appendChild(child);
@@ -118,7 +132,6 @@ function createComponent(component, props, children) {
   wrapper.appendChild(placeholder);
   wrapper.appendChild(el);
   const observer = new MutationObserver((mutations) => {
-    console.log("Mutation observed!!!, mutations: ", mutations);
     for (const mutation of mutations) {
       mutation.removedNodes.forEach((removedNode) => {
         if (removedNode === placeholder) {
@@ -134,7 +147,6 @@ function createComponent(component, props, children) {
   });
   queueMicrotask(() => {
     if (placeholder.parentNode) {
-      console.log("Observing placeholder!");
       observer.observe(placeholder.parentNode, { childList: true });
     }
   });

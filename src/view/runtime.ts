@@ -23,11 +23,16 @@ export function getContext<T>(key: any): T {
 // Lifecycle hooks
 export const cleanupStack: (() => void)[][] = []
 
-export function onMount(fn: () => void) {
+export function onMount(fn: () => void | (() => void)) {
   if (cleanupStack.length === 0) {
     throw new Error("onMount must be called within a component")
   }
-  queueMicrotask(fn)
+  queueMicrotask(() => {
+    const unmount = fn()
+    if (unmount) {
+      onUnmount(unmount)
+    }
+  })
 }
 
 export function onUnmount(fn: () => void) {
@@ -87,27 +92,42 @@ export function appendChild(parent: Node, child: any): void {
   if (Array.isArray(child)) {
     child.forEach((c) => appendChild(parent, c))
   } else if (typeof child === "function") {
-    let node = document.createComment("")
-    parent.appendChild(node)
+    // Create boundary markers
+    let start = document.createComment("start")
+    let end = document.createComment("end")
+    parent.appendChild(start)
+    parent.appendChild(end)
+
     effect(() => {
       const value = child()
-      let newNode: Node
+
+      // Remove old content
+      const range = document.createRange()
+      range.setStartAfter(start)
+      range.setEndBefore(end)
+      range.deleteContents()
+
+      // Prepare new nodes
+      let nodes: Node[]
       if (value instanceof Node) {
-        newNode = value
+        nodes = [value]
       } else if (Array.isArray(value)) {
-        const fragment = document.createDocumentFragment()
+        nodes = []
         value.forEach((v) => {
+          const fragment = document.createDocumentFragment()
           appendChild(fragment, v)
+          nodes.push(...Array.from(fragment.childNodes))
         })
-        newNode = fragment
+      } else if (value !== null && value !== undefined) {
+        nodes = [document.createTextNode(String(value))]
       } else {
-        newNode = document.createTextNode(String(value))
+        nodes = []
       }
-      if (node.parentNode) {
-        node.parentNode.replaceChild(newNode, node)
-      }
-      //@ts-ignore
-      node = newNode
+
+      // Insert new content
+      nodes.forEach((node) => {
+        end.parentNode!.insertBefore(node, end)
+      })
     })
   } else if (child instanceof Node) {
     parent.appendChild(child)
@@ -155,7 +175,6 @@ export function createComponent(
 
   // Remove context and cleanup functions when the component is unmounted
   const observer = new MutationObserver((mutations) => {
-    console.log("Mutation observed!!!, mutations: ", mutations)
     for (const mutation of mutations) {
       mutation.removedNodes.forEach((removedNode) => {
         if (removedNode === placeholder) {
@@ -172,7 +191,6 @@ export function createComponent(
 
   queueMicrotask(() => {
     if (placeholder.parentNode) {
-      console.log("Observing placeholder!")
       observer.observe(placeholder.parentNode, { childList: true })
     }
   })
