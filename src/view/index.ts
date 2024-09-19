@@ -1,3 +1,4 @@
+export * from "../index"
 export type * from "./types"
 export {
   h,

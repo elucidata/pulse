@@ -28,12 +28,7 @@ describe("HTML Util", () => {
   })
 
   it("should render components with children", () => {
-    function MyComponent(_, children) {
-      console.log("args", arguments)
-      return html`<div>${children}</div>`
-    }
-    // const MyComponent = ({ children }: { children: any }) =>
-    //   html`<div>${children}</div>`
+    const MyComponent = (_, children) => html`<div>${children}</div>`
 
     const result = html`<${MyComponent}>
       <span>Child</span>

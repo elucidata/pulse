@@ -129,6 +129,48 @@ Signals comply with Svelte's store contract:
 <div>{$counter}</div>
 ```
 
+## PulseView (Experimental)
+
+Provides a tiny experimental view engine you can optionally include and play with... Feedback welcome. PulseView is closer to solid-js than preact. Components are rendered only once, and update based on signal changes. Plays well with `htm`.
+
+```ts
+import { signal, html, render } from "@elucidata/pulse/view"
+
+const count = signal(0)
+
+const Counter = () => {
+  return html`
+    <div>
+      <p>Counter: ${() => count.value}</p>
+      <button onclick=${() => count.value++}>Increment</button>
+      <button onclick=${() => count.value--}>Decrement</button>
+    </div>
+  `
+}
+
+const OnEvens = () => {
+  onMount(() => {
+    console.log("count is even!", count.peek())
+  })
+  onUnmount(() => {
+    console.log("even is unmounting")
+  })
+  return html` <div>Count is an even number! ${count.value}</div> `
+}
+
+const App = () => {
+  return `
+    <main>
+      <h1>Hello There</h1>
+      <${Counter} />
+      ${() => (count.value % 2 == 0 ? html`<${OnEvans} />` : null)}
+    </main>
+  `
+}
+
+render(html`<${App} />`, document.getElementById("app"))
+```
+
 ## Utilities
 
 ### `persistedSignal`

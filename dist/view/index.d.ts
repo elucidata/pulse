@@ -1,3 +1,6 @@
+export { Signal, batch, computed, effect, signal } from '../index.js';
+export { html } from './html.js';
+
 declare global {
     namespace JSX {
         interface IntrinsicElements {
@@ -14,15 +17,13 @@ type PropsWithChildren = {
     [key: string]: any;
     children?: any;
 };
-type ComponentFunction = (props?: any, children?: any) => HTMLElement;
+type ComponentFunction = (props?: any, children?: any) => HTMLElement | HTMLElement[] | Node | Node[];
 
 declare function setContext(key: any, value: any): void;
 declare function getContext<T>(key: any): T;
 declare function onMount(fn: () => void): void;
 declare function onUnmount(fn: () => void): void;
-declare function h(tag: string | ComponentFunction, props: PropsWithChildren | null, ...children: any[]): HTMLElement;
+declare function h(tag: string | ComponentFunction, props: PropsWithChildren | null, ...children: any[]): Node;
 declare function render(component: ComponentFunction, container: HTMLElement): () => void;
 
-declare const html: (strings: TemplateStringsArray, ...values: any[]) => HTMLElement | HTMLElement[];
-
-export { type ComponentFunction, type PropsWithChildren, getContext, h, html, onMount, onUnmount, render, setContext };
+export { type ComponentFunction, type PropsWithChildren, getContext, h, onMount, onUnmount, render, setContext };

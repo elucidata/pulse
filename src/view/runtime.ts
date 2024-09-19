@@ -1,4 +1,3 @@
-// Import Pulse functions
 import { effect } from "../internals"
 import { ComponentFunction, PropsWithChildren } from "./types"
 
@@ -43,7 +42,7 @@ export function h(
   tag: string | ComponentFunction,
   props: PropsWithChildren | null,
   ...children: any[]
-): HTMLElement {
+): Node {
   if (typeof tag === "function") {
     // Component function
     return createComponent(tag, props, children)
@@ -95,13 +94,19 @@ export function appendChild(parent: Node, child: any): void {
       let newNode: Node
       if (value instanceof Node) {
         newNode = value
+      } else if (Array.isArray(value)) {
+        const fragment = document.createDocumentFragment()
+        value.forEach((v) => {
+          appendChild(fragment, v)
+        })
+        newNode = fragment
       } else {
         newNode = document.createTextNode(String(value))
       }
       if (node.parentNode) {
         node.parentNode.replaceChild(newNode, node)
       }
-      //@ts-ignore: Getting around TypeScript's strictness?
+      //@ts-ignore
       node = newNode
     })
   } else if (child instanceof Node) {
@@ -116,39 +121,75 @@ export function createComponent(
   component: ComponentFunction,
   props: any,
   children: any[]
-): HTMLElement {
+): Node {
   const contextMap = new Map()
   contextStack.push(contextMap)
   const cleanupFns: (() => void)[] = []
   cleanupStack.push(cleanupFns)
 
-  const el = component(props, children)
+  const result = component(props, children)
+
+  let el: Node
+
+  if (Array.isArray(result)) {
+    const fragment = document.createDocumentFragment()
+    result.forEach((node) => {
+      appendChild(fragment, node)
+    })
+    el = fragment
+  } else if (result instanceof Node) {
+    el = result
+  } else if (result !== null && result !== undefined) {
+    el = document.createTextNode(String(result))
+  } else {
+    el = document.createComment("")
+  }
+
+  // Since we might have multiple nodes, we use a placeholder comment to track them
+  const placeholder = document.createComment("")
+
+  // We'll wrap everything in a fragment including the placeholder
+  const wrapper = document.createDocumentFragment()
+  wrapper.appendChild(placeholder)
+  wrapper.appendChild(el)
 
   // Remove context and cleanup functions when the component is unmounted
   const observer = new MutationObserver((mutations) => {
+    console.log("Mutation observed!!!, mutations: ", mutations)
     for (const mutation of mutations) {
-      if (Array.from(mutation.removedNodes).includes(el)) {
-        observer.disconnect()
-        for (const fn of cleanupFns) {
-          fn()
+      mutation.removedNodes.forEach((removedNode) => {
+        if (removedNode === placeholder) {
+          observer.disconnect()
+          for (const fn of cleanupFns) {
+            fn()
+          }
+          contextStack.pop()
+          cleanupStack.pop()
         }
-        contextStack.pop()
-        cleanupStack.pop()
-        break
-      }
+      })
     }
   })
 
-  observer.observe(el.parentNode || document, { childList: true })
+  queueMicrotask(() => {
+    if (placeholder.parentNode) {
+      console.log("Observing placeholder!")
+      observer.observe(placeholder.parentNode, { childList: true })
+    }
+  })
 
-  return el
+  return wrapper
 }
 
 // Render function to mount components
 export function render(component: ComponentFunction, container: HTMLElement) {
-  const el = createComponent(component, null, [])
-  container.appendChild(el)
+  const fragment = createComponent(component, null, [])
+  const nodes = Array.from(fragment.childNodes)
+  container.appendChild(fragment)
   return () => {
-    container.removeChild(el)
+    nodes.forEach((node) => {
+      if (container.contains(node)) {
+        container.removeChild(node)
+      }
+    })
   }
 }

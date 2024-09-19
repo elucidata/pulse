@@ -1,1 +1,59 @@
-import{e as l,f}from"../chunk-QN5SRUK7.js";var d={storage:globalThis.localStorage,toStorage:JSON.stringify,fromStorage:JSON.parse};function c(e,r,a){let{storage:t,toStorage:s,fromStorage:i}={...d,...a};if(!t)return console.warn("No storage available, using regular signal",e),l(r);let n=t.getItem(e),o=l(n?i(n):r);return f(()=>{let g=s(o.value),T=i(t.getItem(e));g!==T&&t.setItem(e,g)}),o}function p(e,r,a=!1){let t=e.peek(),s=typeof r=="function"?r(t):r;if(typeof s!="object"||s===null)return e.set(s);{let n={...t,...s};return e.set(n),a?S(t,n):void 0}}function S(e,r){let a=Reflect.ownKeys(e),t=Reflect.ownKeys(r),s=t.filter(o=>!a.includes(o)),i=a.filter(o=>!t.includes(o)),n=a.filter(o=>e[o]!==r[o]);return[...s,...i,...n]}export{c as persistedSignal,p as update};
+import {
+  effect,
+  signal
+} from "../chunk-KVACTCNH.js";
+
+// src/utils/persistedSignal.ts
+var DEFAULT_OPTIONS = {
+  storage: globalThis.localStorage,
+  toStorage: JSON.stringify,
+  fromStorage: JSON.parse
+};
+function persistedSignal(key, initialValue, options) {
+  let { storage, toStorage, fromStorage } = {
+    ...DEFAULT_OPTIONS,
+    ...options
+  };
+  if (!storage) {
+    console.warn("No storage available, using regular signal", key);
+    return signal(initialValue);
+  }
+  let value = storage.getItem(key);
+  let sig = signal(value ? fromStorage(value) : initialValue);
+  effect(() => {
+    const newValue = toStorage(sig.value);
+    const oldValue = fromStorage(storage.getItem(key));
+    if (newValue !== oldValue) {
+      storage.setItem(key, newValue);
+    }
+  });
+  return sig;
+}
+
+// src/utils/update.ts
+function update(state, updater, reportChanges = false) {
+  const oldState = state.peek();
+  const newState = typeof updater === "function" ? updater(oldState) : updater;
+  const isScalar = typeof newState !== "object" || newState === null;
+  if (isScalar) {
+    return state.set(newState);
+  } else {
+    const updatedState = { ...oldState, ...newState };
+    state.set(updatedState);
+    return reportChanges ? changedFields(oldState, updatedState) : void 0;
+  }
+}
+function changedFields(oldState, newState) {
+  let oldKeys = Reflect.ownKeys(oldState);
+  let newKeys = Reflect.ownKeys(newState);
+  let addedKeys = newKeys.filter((key) => !oldKeys.includes(key));
+  let removedKeys = oldKeys.filter((key) => !newKeys.includes(key));
+  let changedKeys = oldKeys.filter(
+    (key) => oldState[key] !== newState[key]
+  );
+  return [...addedKeys, ...removedKeys, ...changedKeys];
+}
+export {
+  persistedSignal,
+  update
+};
