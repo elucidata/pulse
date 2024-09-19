@@ -1,5 +1,12 @@
-import { effect, isReadonlySignal } from "../internals"
+import { effect as baseEffect, EffectFunction, isReadonlySignal } from "../internals"
 import { ComponentFunction, PropsWithChildren } from "./types"
+
+export function effect(fn: EffectFunction): void {
+  const dispose = baseEffect(fn);
+  if (cleanupStack.length > 0) {
+    cleanupStack[cleanupStack.length - 1]?.push(dispose);
+  }
+}
 
 // Context system
 export const contextStack: Map<any, any>[] = []
@@ -94,34 +101,30 @@ export function h(
   return el
 }
 
-function reactiveAttributeEffect(
-  el: HTMLElement,
-  key: string,
-  worker: () => any
-) {
-  const dispose = effect(() => {
-    const newValue = worker()
+function reactiveAttributeEffect(el: HTMLElement, key: string, worker: () => any) {
+  effect(() => {
+    const newValue = worker();
     if (newValue === false || newValue == null) {
-      el.removeAttribute(key)
+      el.removeAttribute(key);
     } else {
-      el.setAttribute(key, String(newValue))
+      el.setAttribute(key, String(newValue));
     }
-  })
 
-  // Add the dispose function to the current cleanup stack
-  if (cleanupStack.length > 0) {
-    cleanupStack[cleanupStack.length - 1]?.push(dispose)
-  }
+    // Return a cleanup function to remove the attribute on disposal
+    return () => {
+      el.removeAttribute(key);
+    };
+  });
 }
 
 // Helper function to append children to a parent node
-export function appendChild(parent: Node, child: any): void {
+export function appendChild(parent: Node, child: any, disposes?: (() => void)[]): void {
   if (Array.isArray(child)) {
-    child.forEach((c) => appendChild(parent, c))
+    child.forEach((c) => appendChild(parent, c, disposes))
   } else if (typeof child === "function") {
-    reactiveChildContent(parent, child, () => child())
+    reactiveChildContent(parent, () => child())
   } else if (isReadonlySignal(child)) {
-    reactiveChildContent(parent, child, () => child.value)
+    reactiveChildContent(parent, () => child.value)
   } else if (
     child &&
     typeof child === "object" &&
@@ -130,10 +133,14 @@ export function appendChild(parent: Node, child: any): void {
   ) {
     // Child is a component object
     parent.appendChild(child.node)
-
-    // Add the dispose function to the current cleanup stack
-    if (cleanupStack.length > 0) {
-      cleanupStack[cleanupStack.length - 1]?.push(child.dispose)
+    // Collect dispose function
+    if (disposes) {
+      disposes.push(child.dispose)
+    } else {
+      // Add the dispose function to the current cleanup stack
+      if (cleanupStack.length > 0) {
+        cleanupStack[cleanupStack.length - 1]?.push(child.dispose)
+      }
     }
   } else if (child instanceof Node) {
     parent.appendChild(child)
@@ -142,49 +149,42 @@ export function appendChild(parent: Node, child: any): void {
   }
 }
 
-function reactiveChildContent(parent: Node, child: any, worker: () => any) {
+function reactiveChildContent(parent: Node, worker: () => any) {
   // Create boundary markers
-  let start = document.createComment("start")
-  let end = document.createComment("end")
-  parent.appendChild(start)
-  parent.appendChild(end)
+  let start = document.createComment("start");
+  let end = document.createComment("end");
+  parent.appendChild(start);
+  parent.appendChild(end);
 
-  const dispose = effect(() => {
-    const value = worker()
+  effect(() => {
+    const value = worker();
 
-    // Remove old content
-    const range = document.createRange()
-    range.setStartAfter(start)
-    range.setEndBefore(end)
-    range.deleteContents()
+    console.log("new child content value:", value);
 
-    // Prepare new nodes
-    let nodes: Node[]
-    if (value instanceof Node) {
-      nodes = [value]
-    } else if (Array.isArray(value)) {
-      nodes = []
-      value.forEach((v) => {
-        const fragment = document.createDocumentFragment()
-        appendChild(fragment, v)
-        nodes.push(...Array.from(fragment.childNodes))
-      })
-    } else if (value !== null && value !== undefined) {
-      nodes = [document.createTextNode(String(value))]
-    } else {
-      nodes = []
-    }
+    // Prepare new nodes and disposes
+    let nodes: Node[] = [];
+    let disposes: (() => void)[] = [];
+
+    const fragment = document.createDocumentFragment();
+    appendChild(fragment, value, disposes);
+    nodes = Array.from(fragment.childNodes);
 
     // Insert new content
-    nodes.forEach((node) => {
-      end.parentNode!.insertBefore(node, end)
-    })
-  })
+    end.parentNode!.insertBefore(fragment, end);
+    console.log("new child content nodes:", nodes);
 
-  // Add the dispose function to the current cleanup stack
-  if (cleanupStack.length > 0) {
-    cleanupStack[cleanupStack.length - 1]?.push(dispose)
-  }
+    // Return a cleanup function to remove inserted nodes and dispose components on disposal
+    return () => {
+      // Remove inserted nodes
+      const range = document.createRange();
+      range.setStartAfter(start);
+      range.setEndBefore(end);
+      range.deleteContents();
+
+      // Dispose components
+      disposes.forEach(dispose => dispose());
+    };
+  });
 }
 
 // Component creation with context and cleanup management
@@ -205,53 +205,31 @@ export function createComponent(
 
   const result = component(props, children)
 
-  let el: Node
+  const fragment = document.createDocumentFragment()
 
   if (Array.isArray(result)) {
-    const fragment = document.createDocumentFragment()
     result.forEach((node) => {
       appendChild(fragment, node)
     })
-    el = fragment
   } else if (result instanceof Node) {
-    el = result
+    fragment.appendChild(result)
   } else if (result !== null && result !== undefined) {
-    el = document.createTextNode(String(result))
+    fragment.appendChild(document.createTextNode(String(result)))
   } else {
-    el = document.createComment("")
+    fragment.appendChild(document.createComment(""))
   }
 
-  // Placeholder comment to track component's position in the DOM
-  const placeholder = document.createComment("")
-
-  const wrapper = document.createDocumentFragment()
-  wrapper.appendChild(placeholder)
-  wrapper.appendChild(el)
-
-  // MutationObserver to detect unmounting
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      mutation.removedNodes.forEach((removedNode) => {
-        if (removedNode === placeholder) {
-          dispose()
-        }
-      })
-    }
-  })
-
-  queueMicrotask(() => {
-    if (placeholder.parentNode) {
-      observer.observe(placeholder.parentNode, { childList: true })
-    }
-  })
-
+  let isDisposed = false
   const dispose = () => {
-    observer.disconnect()
+    if (isDisposed) {
+      return console.warn("Component already unmounted")
+    }
     for (const fn of cleanupFns) {
       fn()
     }
     contextStack.pop()
     cleanupStack.pop()
+    isDisposed = true
   }
 
   // Add the dispose function to the parent's cleanup functions
@@ -259,25 +237,96 @@ export function createComponent(
     parentCleanupFns.push(dispose)
   }
 
-  return { node: wrapper, dispose }
+  return { node: fragment, dispose }
+
+  
+  // const contextMap = new Map()
+  // contextStack.push(contextMap)
+
+  // const cleanupFns: (() => void)[] = []
+
+  // // Capture the parent's cleanup functions
+  // const parentCleanupFns = cleanupStack[cleanupStack.length - 1]
+
+  // cleanupStack.push(cleanupFns)
+
+  // const result = component(props, children)
+
+  // let el: Node
+
+  // if (Array.isArray(result)) {
+  //   const fragment = document.createDocumentFragment()
+  //   result.forEach((node) => {
+  //     appendChild(fragment, node)
+  //   })
+  //   el = fragment
+  // } else if (result instanceof Node) {
+  //   el = result
+  // } else if (result !== null && result !== undefined) {
+  //   el = document.createTextNode(String(result))
+  // } else {
+  //   el = document.createComment("")
+  // }
+
+  // let isDisposed = false
+  // const dispose = () => {
+  //   if (isDisposed) {
+  //     return console.warn("Component already unmounted")
+  //   }
+  //   for (const fn of cleanupFns) {
+  //     fn()
+  //   }
+  //   contextStack.pop()
+  //   cleanupStack.pop()
+  //   isDisposed = true
+  // }
+
+  // // Add the dispose function to the parent's cleanup functions
+  // if (parentCleanupFns) {
+  //   parentCleanupFns.push(dispose)
+  // }
+
+  // return { node: el, dispose }
 }
 
 // Render function to mount components
 export function render(component: ComponentFunction, container: HTMLElement) {
-  const { node: fragment, dispose } = createComponent(component, null, [])
-  const nodes = Array.from(fragment.childNodes)
-  container.appendChild(fragment)
+  const { node, dispose } = createComponent(component, null, [])
+  const startMarker = document.createComment('start of component')
+  const endMarker = document.createComment('end of component')
+  container.appendChild(startMarker)
+  container.appendChild(node)
+  container.appendChild(endMarker)
   let isDisposed = false
   return () => {
     if (isDisposed) {
-      return console.warn("Component already unmounted")
+      return console.warn("Render root already unmounted")
     }
-    nodes.forEach((node) => {
-      if (container.contains(node)) {
-        container.removeChild(node)
-      }
-      dispose()
-      isDisposed = true
-    })
+    const range = document.createRange()
+    range.setStartAfter(startMarker)
+    range.setEndBefore(endMarker)
+    range.deleteContents()
+    container.removeChild(startMarker)
+    container.removeChild(endMarker)
+    dispose()
+    isDisposed = true
   }
+
+
+  // const { node: fragment, dispose } = createComponent(component, null, [])
+  // const nodes = Array.from(fragment.childNodes)
+  // container.appendChild(fragment)
+  // let isDisposed = false
+  // return () => {
+  //   if (isDisposed) {
+  //     return console.warn("Render root already unmounted")
+  //   }
+  //   nodes.forEach((node) => {
+  //     if (container.contains(node)) {
+  //       container.removeChild(node)
+  //     }
+  //   })
+  //   dispose()
+  //   isDisposed = true
+  // }
 }

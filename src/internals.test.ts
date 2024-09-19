@@ -53,7 +53,126 @@ describe("Signals Module", () => {
       // No need to wait for next tick
       expect(observedValue).toBe(1) // Should remain unchanged
     })
+
+    it("should run immediately", () => {
+      const signal = new Signal(1)
+      let observedValue = 0
+
+      effect(() => {
+        observedValue = signal.value
+      })
+
+      expect(observedValue).toBe(1)
+    })
+
+    it("should cleanup when dependencies change", () => {
+      const signalA = new Signal(1)
+      const signalB = new Signal(2)
+      let observedValue = 0
+
+      effect(() => {
+        observedValue = signalA.value
+      })
+
+      expect(observedValue).toBe(1)
+
+      signalA.value = 3
+
+      // No need to wait for next tick
+      expect(observedValue).toBe(3)
+
+      signalB.value = 4
+
+      // No need to wait for next tick
+      expect(observedValue).toBe(3) // Should remain unchanged
+    })
+
+    it("should cleanup when disposed", () => {
+      const signal = new Signal(1)
+      let observedValue = 0
+
+      const unsubscribe = effect(() => {
+        observedValue = signal.value
+      })
+
+      expect(observedValue).toBe(1)
+
+      unsubscribe()
+
+      signal.value = 2
+
+      // No need to wait for next tick
+      expect(observedValue).toBe(1) // Should remain unchanged
+    })
+
+    // it should handle nested effects correctly
+    it("should handle nested effects correctly", () => {
+      const signal = new Signal(1)
+      let observedValue1 = 0
+      let observedValue2 = 0
+
+      effect(() => {
+        observedValue1 = signal.value
+
+        effect(() => {
+          observedValue2 = signal.value
+        })
+      })
+
+      expect(observedValue1).toBe(1)
+      expect(observedValue2).toBe(1)
+
+      signal.value = 2
+
+      // No need to wait for next tick
+      expect(observedValue1).toBe(2)
+      expect(observedValue2).toBe(2)
+    })
+
+    it("should call returned dispose function when disposed", () => {
+      const signal = new Signal(1)
+      let observedValue = 0
+      let cleanupCalled = false
+
+      const unsubscribe = effect(() => {
+        observedValue = signal.value
+
+        return () => {
+          cleanupCalled = true
+        }
+      })
+
+      expect(observedValue).toBe(1)
+
+      unsubscribe()
+
+      expect(cleanupCalled).toBeTrue()
+    })
+
+    it("should call returned dispose function when dependencies change", () => {
+      const signalA = new Signal(1)
+      const signalB = new Signal(2)
+      let observedValue = 0
+      let cleanupCalled = false
+
+      const unsubscribe = effect(() => {
+        observedValue = signalA.value
+
+        return () => {
+          cleanupCalled = true
+        }
+      })
+
+      expect(observedValue).toBe(1)
+
+      signalA.value = 3
+
+      // No need to wait for next tick
+      expect(observedValue).toBe(3)
+      expect(cleanupCalled).toBeTrue()
+    })
   })
+
 
   describe("Computed", () => {
     it("should update when dependencies change", () => {

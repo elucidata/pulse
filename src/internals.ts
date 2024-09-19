@@ -1,4 +1,4 @@
-type EffectFunction = () => void | (() => void) 
+export type EffectFunction = () => void | (() => void)
 
 let currentComputation: Computation | null = null
 
@@ -118,11 +118,15 @@ class Computation {
   }
 
   cleanup() {
-    this.onInnerCleanup?.()
-    this.onInnerCleanup = void 0
+    if (this.onInnerCleanup) {
+      console.groupCollapsed("effect cleanup")
+      console.log("src", this.fn)
+      console.groupEnd()
+      this.onInnerCleanup()
+      this.onInnerCleanup = void 0
+    }
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
     this.dependencies.clear()
-
   }
 }
 
@@ -159,8 +163,8 @@ function signal<T>(value: T): Signal<T> {
 }
 
 function effect(fn: EffectFunction): () => void {
-  const computation = new Computation(fn);
-  return () => computation.cleanup();
+  const computation = new Computation(fn)
+  return () => computation.cleanup()
 }
 
 function computed<T>(fn: () => T): ReadonlySignal<T> {
