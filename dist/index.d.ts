@@ -19,9 +19,11 @@ declare class Signal<T> implements ReadonlySignal<T> {
     subscribe(run: (value: T) => void): () => void;
 }
 declare class Computation {
+    id: number;
     fn: EffectFunction;
     dependencies: Set<Signal<any>>;
     private isRunning;
+    private isCleaning;
     onInnerCleanup: (() => void) | void;
     onInvalidate: (() => void) | null;
     parentComputation: Computation | null;
@@ -29,7 +31,7 @@ declare class Computation {
     constructor(fn: EffectFunction, parentComputation?: Computation | null);
     run(): void;
     invalidate(): void;
-    cleanup(): void;
+    cleanup(clearFromParent?: boolean): void;
 }
 declare function signal<T>(value: T): Signal<T>;
 declare function effect(fn: EffectFunction): () => void;

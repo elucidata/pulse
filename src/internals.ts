@@ -78,7 +78,14 @@ class Signal<T> implements ReadonlySignal<T> {
   }
 }
 
+let nextID = 1
+
+export function getCurrentComputationId() {
+  return currentComputation?.id
+}
+
 class Computation {
+  id = nextID++
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
   private isRunning: boolean = false
@@ -98,12 +105,13 @@ class Computation {
     if (this.isRunning) {
       return
     }
-    this.cleanup()
+    this.cleanup(false)
     computationStack.push(this)
     currentComputation = this
     try {
       this.isRunning = true
       const result = this.fn()
+
       if (typeof result === 'function') {
         this.onInnerCleanup = result
       } else {
@@ -126,17 +134,17 @@ class Computation {
     }
   }
 
-  cleanup() {
+  cleanup(clearFromParent = true) {
     if (this.isCleaning) {
-      return
+      return 
     }
     this.isCleaning = true
 
     // Clean up child computations first
-    this.childComputations.forEach((child) => {
+    Array.from(this.childComputations).forEach((child) => {
       child.cleanup()
     })
-    this.childComputations.clear()
+    // this.childComputations.clear()
 
     if (this.onInnerCleanup) {
       this.onInnerCleanup()
@@ -146,7 +154,7 @@ class Computation {
     this.dependencies.clear()
 
     // Remove this computation from its parent's childComputations
-    if (this.parentComputation) {
+    if (this.parentComputation && clearFromParent) {
       this.parentComputation.childComputations.delete(this)
     }
     this.isCleaning = false

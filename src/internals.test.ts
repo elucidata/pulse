@@ -1,5 +1,5 @@
-import { describe, it, expect } from "bun:test"
-import { Signal, effect, computed, batch } from "./internals"
+import { describe, it, expect, test } from "bun:test"
+import { Signal, effect, computed, batch, getCurrentComputationId, getCurrentComputation } from "./internals"
 
 describe("Signals Module", () => {
   describe("Signal", () => {
@@ -250,6 +250,56 @@ describe("Signals Module", () => {
       // No need to wait for next tick
       expect(observedValue).toBe(3)
       expect(cleanupCalled).toBeTrue()
+    })
+
+    it("should support nested effect revaluation when dependencies change", () => {
+      const signalA = new Signal(1)
+      const signalB = new Signal(2)
+      let observedValueA = 0
+      let observedValueB = 0
+      let rootCleanupCalled = 0
+      let nestedCleanupCalled = 0
+
+      const unsubscribe = effect(() => {
+        observedValueA = signalA.value
+
+        
+        effect(() => {
+          observedValueB = signalB.value
+          
+          return () => {
+            nestedCleanupCalled++
+          }
+        })
+
+        return () => {
+          rootCleanupCalled++
+        }
+      })
+
+      expect(observedValueA).toBe(1)
+      expect(observedValueB).toBe(2)
+      expect(rootCleanupCalled).toBe(0)
+      expect(nestedCleanupCalled).toBe(0)
+
+      signalB.value = 20
+
+      expect(observedValueA).toBe(1)
+      expect(observedValueB).toBe(20)
+      expect(rootCleanupCalled).toBe(0)
+      expect(nestedCleanupCalled).toBe(1)
+
+      signalA.value = 10
+
+      expect(observedValueA).toBe(10)
+      expect(observedValueB).toBe(20)
+      expect(rootCleanupCalled).toBe(1)
+      expect(nestedCleanupCalled).toBe(2)
+
+      unsubscribe()
+
+      expect(rootCleanupCalled).toBe(2)
+      expect(nestedCleanupCalled).toBe(3)
     })
   })
 
@@ -564,27 +614,3 @@ describe("Signal Subscribe Method", () => {
   //   unsubscribe2()
   // })
 })
-
-// let cleanupOrder = ""
-// const disposeRoot = effect(() => {
-//   // Root effect
-//   effect(() => {
-//     // Child 1 effect
-//     effect(() => {
-//       // Child 2 effect
-//       return () => {
-//         cleanupOrder += "2"
-//       }
-//     })
-//     return () => {
-//       cleanupOrder += "1"
-//     }
-//   })
-//   return () => {
-//     cleanupOrder += "0"
-//   }
-// })
-
-// disposeRoot()
-// // What should cleanupOrder be?
-// console.log(cleanupOrder) // 210
