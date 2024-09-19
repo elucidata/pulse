@@ -1,5 +1,4 @@
-import { Signal } from './index.js';
-export { batch, computed, effect, signal } from './index.js';
+import { Signal } from '../index.js';
 
 interface IStorage {
     getItem(key: string): string | null;
@@ -17,6 +16,7 @@ interface PersistedSignalOptions<T> {
  * If the storage is not available, it will return a regular signal.
  */
 declare function persistedSignal<T>(key: string, initialValue: T, options?: Partial<PersistedSignalOptions<T>>): Signal<T>;
+
 type Updater<T> = Required<T> | ((v: T) => T);
 type Merger<T> = Partial<T> | ((v: T) => Partial<T>);
 /**
@@ -28,4 +28,4 @@ type Merger<T> = Partial<T> | ((v: T) => Partial<T>);
  */
 declare function update<T>(state: Signal<T>, updater: Updater<T> | Merger<T>, reportChanges?: boolean): void | (keyof T)[];
 
-export { Signal, persistedSignal, update };
+export { type IStorage, type Merger, type PersistedSignalOptions, type Updater, persistedSignal, update };

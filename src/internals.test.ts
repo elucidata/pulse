@@ -332,37 +332,37 @@ describe("Signal Subscribe Method", () => {
     expect(subscriberValue).toBe(5) // Should not have updated
   })
 
-  it.skip("should handle unsubscribe during notification", () => {
-    // I don't think this is possible
-    const signal = new Signal(1)
-    let subscriberValue1 = 0
-    let subscriberValue2 = 0
+  // it.skip("should handle unsubscribe during notification", () => {
+  //   // I don't think this is possible
+  //   const signal = new Signal(1)
+  //   let subscriberValue1 = 0
+  //   let subscriberValue2 = 0
 
-    // Declare unsubscribe1 before use
-    let unsubscribe1!: () => void
+  //   // Declare unsubscribe1 before use
+  //   let unsubscribe1!: () => void
 
-    const subscriber1 = (value: number) => {
-      subscriberValue1 = value
-      unsubscribe1() // Unsubscribe during notification
-    }
+  //   const subscriber1 = (value: number) => {
+  //     subscriberValue1 = value
+  //     unsubscribe1() // Unsubscribe during notification
+  //   }
 
-    unsubscribe1 = signal.subscribe(subscriber1)
+  //   unsubscribe1 = signal.subscribe(subscriber1)
 
-    const unsubscribe2 = signal.subscribe((value) => {
-      subscriberValue2 = value
-    })
+  //   const unsubscribe2 = signal.subscribe((value) => {
+  //     subscriberValue2 = value
+  //   })
 
-    // Initial call
-    expect(subscriberValue1).toBe(1)
-    expect(subscriberValue2).toBe(1)
+  //   // Initial call
+  //   expect(subscriberValue1).toBe(1)
+  //   expect(subscriberValue2).toBe(1)
 
-    // Update signal value
-    signal.value = 2
+  //   // Update signal value
+  //   signal.value = 2
 
-    // Subscriber1 should have unsubscribed itself, so its value should not change
-    expect(subscriberValue1).toBe(1) // Should not have updated
-    expect(subscriberValue2).toBe(2)
+  //   // Subscriber1 should have unsubscribed itself, so its value should not change
+  //   expect(subscriberValue1).toBe(1) // Should not have updated
+  //   expect(subscriberValue2).toBe(2)
 
-    unsubscribe2()
-  })
+  //   unsubscribe2()
+  // })
 })

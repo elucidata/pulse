@@ -15,7 +15,13 @@
       "import": "./dist/react/index.js"
     },
     "./utils": {
-      "import": "./dist/utils.js"
+      "import": "./dist/utils/index.js"
+    },
+    "./view": {
+      "import": "./dist/view/index.js"
+    },
+    "./view/html": {
+      "import": "./dist/view/html.js"
     }
   },
   "repository": {
@@ -23,11 +29,11 @@
     "url": "git+https://github.com/elucidata/pulse.git"
   },
   "scripts": {
-    "dist": "rm -rf dist && tsup ./src/index.ts ./src/utils.ts ./src/react/index.ts --dts --format esm --minify --external react && bun run stats",
-    "distTSC": "rm -rf dist && tsc ./src/index.ts ./src/utils.ts ./src/react/index.ts --outDir dist --strict false -d --skipLibCheck --module esnext --target ES2022 && bun run stats",
-    "stats": "echo \"core gzipped:\" && bun run stats:core && echo \"all modules gzipped:\" && bun run stats:all",
+    "dist": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --minify --external react && bun run stats",
+    "stats": "echo \"core gzipped:\" && bun run stats:core && echo \"view gzipped:\" && bun run stats:view && echo \"all modules gzipped:\" && bun run stats:all",
     "stats:core": "gzip -c9 dist/index.js dist/chunk*.js  | wc -c | numfmt --to=si",
-    "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils.js dist/react/index.js  | wc -c | numfmt --to=si",
+    "stats:view": "gzip -c9 dist/index.js dist/chunk*.js dist/view/index.js dist/view/html.js  | wc -c | numfmt --to=si",
+    "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils/index.js dist/react/index.js dist/view/index.js dist/view/html.js | wc -c | numfmt --to=si",
     "prepublish": "bun run dist",
     "test": "bun test"
   },
@@ -39,6 +45,10 @@
   },
   "peerDependencies": {
     "preact": "^10.23.1",
-    "react": "^18.3.1"
+    "react": "^18.3.1",
+    "htm": "^3.1.1"
+  },
+  "dependencies": {
+    "@happy-dom/global-registrator": "^15.7.4"
   }
 }
