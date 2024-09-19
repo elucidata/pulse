@@ -11,22 +11,26 @@ No need to worry about tracking dependencies in your computed values or effectsâ
 At its core it's a simple API:
 
 ```ts
-declare function signal<T>(intialValue: T): Signal<T>
-declare function computed<T>(worker: () => T): ReadonlySignal<T>
-declare function effect(worker: () => void): void
-declare function batch(worker: () => void): void
 
-declare class ReadonlySignal<T> {
-  readonly value: T // reactive getter
-  peek(): T
-  get(): T
-  subscribe(listener: (newValue: T) => void): () => void
+declare function signal<T>(value: T): Signal<T>;
+declare function effect(fn: EffectFunction): () => void;
+declare function computed<T>(fn: () => T): ReadonlySignal<T>;
+declare function batch(fn: () => void): void;
+
+type EffectFunction = () => void | (() => void);
+
+interface ReadonlySignal<T> {
+    readonly value: T;
+    get(): T;
+    peek(): T;
+    subscribe(run: (value: T) => void): () => void;
 }
-
-declare class Signal<T> extends ReadonlySignal<T> {
-  readonly value: T // reactive getter and setter
-  set(newValue: T): void
-  update(updater: (oldValue: T) => T): void
+declare class Signal<T> implements ReadonlySignal<T> {
+    constructor(value: T);
+    get value(): T;
+    set value(newValue: T);
+    set(newValue: T): void;
+    update(updater: (value: T) => T): void;
 }
 ```
 
@@ -149,7 +153,6 @@ declare function getContext<T>(key: any): T;
 declare function onMount(fn: () => void | (() => void)): void;
 
 declare function render(component: ComponentFunction, container: HTMLElement): () => void;
-
 ```
 
 ### Demo Usage
