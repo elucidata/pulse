@@ -1,4 +1,4 @@
-type EffectFunction = () => void;
+type EffectFunction = () => void | (() => void);
 interface ReadonlySignal<T> {
     readonly value: T;
     get(): T;
@@ -22,6 +22,7 @@ declare class Computation {
     fn: EffectFunction;
     dependencies: Set<Signal<any>>;
     private isRunning;
+    onInnerCleanup: (() => void) | void;
     onInvalidate: (() => void) | null;
     constructor(fn: EffectFunction);
     run(): void;
@@ -29,7 +30,7 @@ declare class Computation {
     cleanup(): void;
 }
 declare function signal<T>(value: T): Signal<T>;
-declare function effect(fn: EffectFunction): void;
+declare function effect(fn: EffectFunction): () => void;
 declare function computed<T>(fn: () => T): ReadonlySignal<T>;
 declare function batch(fn: () => void): void;
 

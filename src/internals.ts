@@ -1,4 +1,4 @@
-type EffectFunction = () => void
+type EffectFunction = () => void | (() => void) 
 
 let currentComputation: Computation | null = null
 
@@ -82,6 +82,7 @@ class Computation {
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
   private isRunning: boolean = false
+  onInnerCleanup: (() => void) | void = void 0
   onInvalidate: (() => void) | null = null
 
   constructor(fn: EffectFunction) {
@@ -98,7 +99,7 @@ class Computation {
     computationStack.push(this)
     currentComputation = this
     try {
-      this.fn()
+      this.onInnerCleanup = this.fn()
     } finally {
       computationStack.pop()
       currentComputation = computationStack[computationStack.length - 1] || null
@@ -117,16 +118,23 @@ class Computation {
   }
 
   cleanup() {
+    this.onInnerCleanup?.()
+    this.onInnerCleanup = void 0
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
     this.dependencies.clear()
+
   }
 }
 
 class ComputedSignal<T> implements ReadonlySignal<T> {
   private signal: Signal<T>
+  cleanup: () => void
 
-  constructor(signal: Signal<T>) {
-    this.signal = signal
+  constructor(fn: () => T) {
+    this.signal = new Signal<T>(undefined as any)
+    this.cleanup = effect(() => {
+      this.signal.value = fn()
+    })
   }
 
   get value(): T {
@@ -150,16 +158,13 @@ function signal<T>(value: T): Signal<T> {
   return new Signal(value)
 }
 
-function effect(fn: EffectFunction) {
-  new Computation(fn)
+function effect(fn: EffectFunction): () => void {
+  const computation = new Computation(fn);
+  return () => computation.cleanup();
 }
 
 function computed<T>(fn: () => T): ReadonlySignal<T> {
-  const internalSignal = new Signal<T>(undefined as any)
-  effect(() => {
-    internalSignal.value = fn()
-  })
-  return new ComputedSignal(internalSignal)
+  return new ComputedSignal(fn)
 }
 
 function batch(fn: () => void) {

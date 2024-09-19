@@ -1,7 +1,1 @@
-import {
-  html
-} from "../chunk-HJBSEZBZ.js";
-import "../chunk-MWIVK5UY.js";
-export {
-  html
-};
+import{g as a}from"../chunk-6UBHYFFB.js";import"../chunk-AT6GGCDO.js";export{a as html};

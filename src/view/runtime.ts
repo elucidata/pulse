@@ -99,7 +99,7 @@ function reactiveAttributeEffect(
   key: string,
   worker: () => any
 ) {
-  effect(() => {
+  const dispose = effect(() => {
     const newValue = worker()
     if (newValue === false || newValue == null) {
       el.removeAttribute(key)
@@ -107,6 +107,11 @@ function reactiveAttributeEffect(
       el.setAttribute(key, String(newValue))
     }
   })
+
+  // Add the dispose function to the current cleanup stack
+  if (cleanupStack.length > 0) {
+    cleanupStack[cleanupStack.length - 1]?.push(dispose)
+  }
 }
 
 // Helper function to append children to a parent node
@@ -144,7 +149,7 @@ function reactiveChildContent(parent: Node, child: any, worker: () => any) {
   parent.appendChild(start)
   parent.appendChild(end)
 
-  effect(() => {
+  const dispose = effect(() => {
     const value = worker()
 
     // Remove old content
@@ -175,6 +180,11 @@ function reactiveChildContent(parent: Node, child: any, worker: () => any) {
       end.parentNode!.insertBefore(node, end)
     })
   })
+
+  // Add the dispose function to the current cleanup stack
+  if (cleanupStack.length > 0) {
+    cleanupStack[cleanupStack.length - 1]?.push(dispose)
+  }
 }
 
 // Component creation with context and cleanup management
