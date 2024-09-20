@@ -9,7 +9,7 @@ export interface ReadonlySignal<T> {
 
 export class Signal<T> implements ReadonlySignal<T> {
   private _value: T
-  private subscribers?: Set<(value: T) => void>
+  private _subscribers?: Set<(value: T) => void>
   dependents: Set<Computation> = new Set()
 
   constructor(value: T) {
@@ -29,7 +29,7 @@ export class Signal<T> implements ReadonlySignal<T> {
       this._value = newValue
       const dependents = Array.from(this.dependents)
       dependents.forEach((dep) => dep.invalidate())
-      this.subscribers?.forEach((subscriber) => subscriber(newValue))
+      this._subscribers?.forEach((subscriber) => subscriber(newValue))
     }
   }
 
@@ -49,13 +49,13 @@ export class Signal<T> implements ReadonlySignal<T> {
   // Add the subscribe method to conform to Svelte's store interface
   subscribe(run: (value: T) => void): () => void {
     run(this._value)
-    if (!this.subscribers) {
-      this.subscribers = new Set()
+    if (!this._subscribers) {
+      this._subscribers = new Set()
     }
-    this.subscribers.add(run)
+    this._subscribers.add(run)
 
     return () => {
-      this.subscribers!.delete(run)
+      this._subscribers!.delete(run)
     }
   }
 }
@@ -66,9 +66,9 @@ export class Computation {
   readonly id = Computation.lastId++
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
-  private isRunning: boolean = false
-  private isCleaning: boolean = false
-  onInnerCleanup: (() => void) | void = void 0
+  private _isRunning: boolean = false
+  private _isCleaning: boolean = false
+  private _fnCleanup: (() => void) | void = void 0
   onInvalidate: (() => void) | null = null
   parentComputation: Computation | null
   childComputations: Set<Computation> = new Set()
@@ -83,23 +83,23 @@ export class Computation {
   }
 
   run() {
-    if (this.isRunning) {
+    if (this._isRunning) {
       return
     }
     this.cleanup(false)
     Computation.stack.push(this)
     Computation.current = this
     try {
-      this.isRunning = true
+      this._isRunning = true
       const result = this.fn()
 
       if (typeof result === "function") {
-        this.onInnerCleanup = result
+        this._fnCleanup = result
       } else {
-        this.onInnerCleanup = void 0
+        this._fnCleanup = void 0
       }
     } finally {
-      this.isRunning = false
+      this._isRunning = false
       Computation.stack.pop()
       Computation.current =
         Computation.stack[Computation.stack.length - 1] || null
@@ -117,19 +117,19 @@ export class Computation {
   }
 
   cleanup(clearFromParent = true) {
-    if (this.isCleaning) {
+    if (this._isCleaning) {
       return
     }
-    this.isCleaning = true
+    this._isCleaning = true
 
     Array.from(this.childComputations).forEach((child) => {
       child.cleanup()
     })
     // this.childComputations.clear()
 
-    if (this.onInnerCleanup) {
-      this.onInnerCleanup()
-      this.onInnerCleanup = void 0
+    if (this._fnCleanup) {
+      this._fnCleanup()
+      this._fnCleanup = void 0
     }
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
     this.dependencies.clear()
@@ -137,7 +137,7 @@ export class Computation {
     if (this.parentComputation && clearFromParent) {
       this.parentComputation.childComputations.delete(this)
     }
-    this.isCleaning = false
+    this._isCleaning = false
   }
 
   static current: Computation | null = null
@@ -147,30 +147,30 @@ export class Computation {
 }
 
 export class ComputedSignal<T> implements ReadonlySignal<T> {
-  private signal: Signal<T>
+  private _signal: Signal<T>
   readonly cleanup: () => void
 
   constructor(fn: () => T) {
-    this.signal = new Signal<T>(undefined as any)
+    this._signal = new Signal<T>(undefined as any)
     this.cleanup = effect(() => {
-      this.signal.value = fn()
+      this._signal.value = fn()
     })
   }
 
   get value(): T {
-    return this.signal.value
+    return this._signal.value
   }
 
   peek(): T {
-    return this.signal.peek()
+    return this._signal.peek()
   }
 
   get() {
-    return this.signal.get()
+    return this._signal.get()
   }
 
   subscribe(run: (value: T) => void): () => void {
-    return this.signal.subscribe(run)
+    return this._signal.subscribe(run)
   }
 }
 

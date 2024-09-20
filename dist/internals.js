@@ -1,6 +1,6 @@
 export class Signal {
     _value;
-    subscribers;
+    _subscribers;
     dependents = new Set();
     constructor(value) {
         this._value = value;
@@ -17,7 +17,7 @@ export class Signal {
             this._value = newValue;
             const dependents = Array.from(this.dependents);
             dependents.forEach((dep) => dep.invalidate());
-            this.subscribers?.forEach((subscriber) => subscriber(newValue));
+            this._subscribers?.forEach((subscriber) => subscriber(newValue));
         }
     }
     peek() {
@@ -35,12 +35,12 @@ export class Signal {
     // Add the subscribe method to conform to Svelte's store interface
     subscribe(run) {
         run(this._value);
-        if (!this.subscribers) {
-            this.subscribers = new Set();
+        if (!this._subscribers) {
+            this._subscribers = new Set();
         }
-        this.subscribers.add(run);
+        this._subscribers.add(run);
         return () => {
-            this.subscribers.delete(run);
+            this._subscribers.delete(run);
         };
     }
 }
@@ -49,8 +49,8 @@ export class Computation {
     id = Computation.lastId++;
     fn;
     dependencies = new Set();
-    isRunning = false;
-    isCleaning = false;
+    _isRunning = false;
+    _isCleaning = false;
     onInnerCleanup = void 0;
     onInvalidate = null;
     parentComputation;
@@ -61,14 +61,14 @@ export class Computation {
         this.run();
     }
     run() {
-        if (this.isRunning) {
+        if (this._isRunning) {
             return;
         }
         this.cleanup(false);
         Computation.stack.push(this);
         Computation.current = this;
         try {
-            this.isRunning = true;
+            this._isRunning = true;
             const result = this.fn();
             if (typeof result === "function") {
                 this.onInnerCleanup = result;
@@ -78,7 +78,7 @@ export class Computation {
             }
         }
         finally {
-            this.isRunning = false;
+            this._isRunning = false;
             Computation.stack.pop();
             Computation.current =
                 Computation.stack[Computation.stack.length - 1] || null;
@@ -96,10 +96,10 @@ export class Computation {
         }
     }
     cleanup(clearFromParent = true) {
-        if (this.isCleaning) {
+        if (this._isCleaning) {
             return;
         }
-        this.isCleaning = true;
+        this._isCleaning = true;
         Array.from(this.childComputations).forEach((child) => {
             child.cleanup();
         });
@@ -113,7 +113,7 @@ export class Computation {
         if (this.parentComputation && clearFromParent) {
             this.parentComputation.childComputations.delete(this);
         }
-        this.isCleaning = false;
+        this._isCleaning = false;
     }
     static current = null;
     static stack = [];
@@ -121,25 +121,25 @@ export class Computation {
     static pending = new Set();
 }
 export class ComputedSignal {
-    signal;
+    _signal;
     cleanup;
     constructor(fn) {
-        this.signal = new Signal(undefined);
+        this._signal = new Signal(undefined);
         this.cleanup = effect(() => {
-            this.signal.value = fn();
+            this._signal.value = fn();
         });
     }
     get value() {
-        return this.signal.value;
+        return this._signal.value;
     }
     peek() {
-        return this.signal.peek();
+        return this._signal.peek();
     }
     get() {
-        return this.signal.get();
+        return this._signal.get();
     }
     subscribe(run) {
-        return this.signal.subscribe(run);
+        return this._signal.subscribe(run);
     }
 }
 export function signal(value) {

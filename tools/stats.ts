@@ -4,9 +4,9 @@ async function reportSizes(object: Record<string, ShellPromise>) {
   const labels = Object.keys(object)
   const sizes = await Promise.all(Object.values(object))
   console.log(
-    "Sizes\n - ",
+    "Sizes\n -",
     sizes
-      .map((s, i) => `${labels[i]}: ${String(s.stdout).trim()}`)
+      .map((s, i) => `${labels[i].trim()}: ${String(s.stdout).trim()}`)
       .join("\n - ")
   )
 }

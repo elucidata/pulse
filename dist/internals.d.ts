@@ -7,7 +7,7 @@ export interface ReadonlySignal<T> {
 }
 export declare class Signal<T> implements ReadonlySignal<T> {
     private _value;
-    private subscribers?;
+    private _subscribers?;
     dependents: Set<Computation>;
     constructor(value: T);
     get value(): T;
@@ -23,9 +23,9 @@ export declare class Computation {
     readonly id: number;
     fn: EffectFunction;
     dependencies: Set<Signal<any>>;
-    private isRunning;
-    private isCleaning;
-    onInnerCleanup: (() => void) | void;
+    private _isRunning;
+    private _isCleaning;
+    protected onInnerCleanup: (() => void) | void;
     onInvalidate: (() => void) | null;
     parentComputation: Computation | null;
     childComputations: Set<Computation>;
@@ -39,7 +39,7 @@ export declare class Computation {
     static pending: Set<Computation>;
 }
 export declare class ComputedSignal<T> implements ReadonlySignal<T> {
-    private signal;
+    private _signal;
     readonly cleanup: () => void;
     constructor(fn: () => T);
     get value(): T;
