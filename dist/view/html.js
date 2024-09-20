@@ -1,1 +1,4 @@
-import{g as a}from"../chunk-OQJ24JMF.js";import"../chunk-G46YZ25X.js";export{a as html};
+import htm from "htm";
+import { h } from "./runtime";
+export const html = htm.bind(h);
+//# sourceMappingURL=html.js.map

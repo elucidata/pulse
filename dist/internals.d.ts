@@ -1,11 +1,11 @@
-type EffectFunction = () => void | (() => void);
-interface ReadonlySignal<T> {
+export type EffectFunction = () => void | (() => void);
+export interface ReadonlySignal<T> {
     readonly value: T;
     get(): T;
     peek(): T;
     subscribe(run: (value: T) => void): () => void;
 }
-declare class Signal<T> implements ReadonlySignal<T> {
+export declare class Signal<T> implements ReadonlySignal<T> {
     private _value;
     private subscribers?;
     dependents: Set<Computation>;
@@ -18,7 +18,7 @@ declare class Signal<T> implements ReadonlySignal<T> {
     update(updater: (value: T) => T): void;
     subscribe(run: (value: T) => void): () => void;
 }
-declare class Computation {
+export declare class Computation {
     static lastId: number;
     readonly id: number;
     fn: EffectFunction;
@@ -38,9 +38,18 @@ declare class Computation {
     static isBatching: boolean;
     static pending: Set<Computation>;
 }
-declare function signal<T>(value: T): Signal<T>;
-declare function effect(fn: EffectFunction): () => void;
-declare function computed<T>(fn: () => T): ReadonlySignal<T>;
-declare function batch(fn: () => void): void;
-
-export { type ReadonlySignal as R, Signal as S, batch as b, computed as c, effect as e, signal as s };
+export declare class ComputedSignal<T> implements ReadonlySignal<T> {
+    private signal;
+    readonly cleanup: () => void;
+    constructor(fn: () => T);
+    get value(): T;
+    peek(): T;
+    get(): T;
+    subscribe(run: (value: T) => void): () => void;
+}
+export declare function signal<T>(value: T): Signal<T>;
+export declare function effect(fn: EffectFunction): () => void;
+export declare function computed<T>(fn: () => T): ReadonlySignal<T>;
+export declare function batch(fn: () => void): void;
+export declare function isObservable(value: any): boolean;
+export declare function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T>;

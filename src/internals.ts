@@ -148,7 +148,7 @@ export class Computation {
 
 export class ComputedSignal<T> implements ReadonlySignal<T> {
   private signal: Signal<T>
-  cleanup: () => void
+  readonly cleanup: () => void
 
   constructor(fn: () => T) {
     this.signal = new Signal<T>(undefined as any)

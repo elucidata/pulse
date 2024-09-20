@@ -6,8 +6,6 @@ Pulse signals are straightforward containers for values—no magic, no proxies, 
 
 No need to worry about tracking dependencies in your computed values or effects—Pulse handles that automatically.
 
-<small>Minify+gzips to < 2kB. Core reactivity is < 1kB.</small>
-
 At its core it's a simple API:
 
 ```ts

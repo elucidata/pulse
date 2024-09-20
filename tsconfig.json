@@ -8,6 +8,7 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "types": [],
+    "declaration": true,
 
     // Module resolution
     "baseUrl": "./", // Lets you set a base directory to resolve non-absolute module names.
@@ -34,8 +35,9 @@
   "include": [
     "src/internals.ts",
     "src/index.ts",
-    "src/utils.ts",
-    "src/react/*.ts"
+    "src/utils/*.ts",
+    "src/react/*.ts",
+    "src/view/*.ts"
   ],
-  "exclude": ["./node_modules/**/*", "./*.test.ts"]
+  "exclude": ["./node_modules/**/*", "./*.test.ts", "./**/*.test.ts"]
 }

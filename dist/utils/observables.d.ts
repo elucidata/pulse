@@ -1,6 +1,5 @@
-import { R as ReadonlySignal } from './index-CP5b4Fzw.js';
-
-interface Observable<T> extends ReadonlySignal<T> {
+import { ReadonlySignal } from "../internals";
+export interface Observable<T> extends ReadonlySignal<T> {
     subscribe(run: (value: T) => void): () => void;
     map<U>(mapFn: (value: T) => U): Observable<U>;
     filter(predicate: (value: T) => boolean): Observable<T>;
@@ -20,7 +19,7 @@ interface Observable<T> extends ReadonlySignal<T> {
  * @returns {Observable<T>} An observable object with methods to map, filter, subscribe,
  *  and convert to a signal.
  */
-declare function observable<T>(setup: (emit: (value: T) => void) => () => void): Observable<T>;
+export declare function observable<T>(setup: (emit: (value: T) => void) => () => void): Observable<T>;
 /**
  * Creates an observable from a DOM event.
  *
@@ -30,8 +29,6 @@ declare function observable<T>(setup: (emit: (value: T) => void) => () => void):
  * @returns {Observable<HTMLElementEventMap[K]>} An observable that emits events
  *  of the specified type.
  */
-declare function fromDomEvent<K extends keyof HTMLElementEventMap>(element: HTMLElement, eventName: K): Observable<HTMLElementEventMap[K]>;
-declare function map<T, U>(source: Observable<T>, mapFn: (value: T) => U): Observable<U>;
-declare function filter<T>(source: Observable<T>, predicate: (value: T) => boolean): Observable<T>;
-
-export { type Observable as O, filter as a, fromDomEvent as f, map as m, observable as o };
+export declare function fromDomEvent<K extends keyof HTMLElementEventMap>(element: HTMLElement, eventName: K): Observable<HTMLElementEventMap[K]>;
+export declare function map<T, U>(source: Observable<T>, mapFn: (value: T) => U): Observable<U>;
+export declare function filter<T>(source: Observable<T>, predicate: (value: T) => boolean): Observable<T>;
