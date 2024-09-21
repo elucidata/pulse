@@ -10,12 +10,8 @@ export function effect(fn: EffectFunction): void {
   if (currentCleanupFns) {
     currentCleanupFns.push(dispose)
   }
-  // if (cleanupStack.length > 0) {
-  //   cleanupStack[cleanupStack.length - 1]?.push(dispose)
-  // }
 }
 
-// Context system
 export const contextStack: Map<any, any>[] = []
 
 export function setContext(key: any, value: any) {
@@ -150,19 +146,9 @@ export function appendChild(
   ) {
     // Child is a component object
     parent.appendChild(child.node)
-    // Collect dispose function
-    // if (disposes) {
-    //   disposes.push(child.dispose)
-    // }
     if (currentCleanupFns) {
       currentCleanupFns.push(child.dispose)
     }
-    // else {
-    //   // Add the dispose function to the current cleanup stack
-    //   if (cleanupStack.length > 0) {
-    //     cleanupStack[cleanupStack.length - 1]?.push(child.dispose)
-    //   }
-    // }
   } else if (child instanceof Node) {
     parent.appendChild(child)
   } else if (child !== null && child !== undefined) {
@@ -171,56 +157,41 @@ export function appendChild(
 }
 
 function reactiveChildContent(parent: Node, worker: () => any) {
-  // Create boundary markers
+  // Boundary markers
   let start = document.createComment("")
-  let end = document.createComment("")
+  let end = document.createComment("/")
   parent.appendChild(start)
   parent.appendChild(end)
 
   effect(() => {
-    // Create a cleanupFns array for this effect
     const cleanupFns: (() => void)[] = []
     cleanupStack.push(cleanupFns)
 
     const value = worker()
 
-    // Prepare disposer list
     let disposes: (() => void)[] = []
 
     const fragment = document.createDocumentFragment()
     appendChild(fragment, value, disposes)
 
-    // Insert new content
     end.parentNode!.insertBefore(fragment, end)
-
-    // Now pop the cleanupStack after cleanups are done
-    // cleanupStack.pop();
-    // Do not pop the cleanupStack here?
-    // Keep it until the effect's cleanup function runs
 
     // Return a cleanup function to remove inserted nodes and dispose components on disposal
     return () => {
-      // Remove inserted nodes
       const range = document.createRange()
       range.setStartAfter(start)
       range.setEndBefore(end)
       range.deleteContents()
 
-      // Dispose components
       disposes.forEach((dispose) => dispose())
-
-      // Also call cleanup functions
       for (const fn of cleanupFns) {
         fn()
       }
-
-      // Now pop the cleanupStack after cleanups are done
       cleanupStack.pop()
     }
   })
 }
 
-// Component creation with context and cleanup management
 export function createComponent(
   component: ComponentFunction,
   props: any,
@@ -231,14 +202,12 @@ export function createComponent(
 
   const cleanupFns: (() => void)[] = []
 
-  // Save the previous currentCleanupFns
   const prevCleanupFns = currentCleanupFns
   currentCleanupFns = cleanupFns
 
   cleanupStack.push(cleanupFns)
 
   const result = component(props, children)
-
   const fragment = document.createDocumentFragment()
 
   if (Array.isArray(result)) {
@@ -255,9 +224,6 @@ export function createComponent(
       return console.warn("Component already unmounted")
     }
 
-    // Push our context onto contextStack
-    // contextStack.push(contextMap)
-
     for (const fn of cleanupFns) {
       fn()
     }
@@ -267,80 +233,34 @@ export function createComponent(
     isDisposed = true
   }
 
-  // Restore previous currentCleanupFns
   currentCleanupFns = prevCleanupFns
 
-  // Add our dispose function to the parent's cleanupFns
   if (currentCleanupFns) {
     currentCleanupFns.push(dispose)
   }
 
   return { node: fragment, dispose }
 }
-// export function createComponent(
-//   component: ComponentFunction,
-//   props: any,
-//   children: any[]
-// ): { node: Node; dispose: () => void } {
-//   const contextMap = new Map()
-//   contextStack.push(contextMap)
 
-//   const cleanupFns: (() => void)[] = []
-//   // Capture the parent's cleanup functions
-//   const parentCleanupFns = cleanupStack[cleanupStack.length - 1]
-//   cleanupStack.push(cleanupFns)
-
-//   const result = component(props, children)
-
-//   const fragment = document.createDocumentFragment()
-
-//   if (Array.isArray(result)) {
-//     result.forEach((node) => {
-//       appendChild(fragment, node)
-//     })
-//   } else if (result instanceof Node) {
-//     fragment.appendChild(result)
-//   } else if (result !== null && result !== undefined) {
-//     fragment.appendChild(document.createTextNode(String(result)))
-//   } else {
-//     fragment.appendChild(document.createComment(""))
-//   }
-
-//   let isDisposed = false
-//   const dispose = () => {
-//     if (isDisposed) {
-//       return console.warn("Component already unmounted")
-//     }
-//     console.log(
-//       "Disposing component with depth",
-//       cleanupStack.length,
-//       cleanupFns
-//     )
-//     for (const fn of cleanupFns) {
-//       console.log("Running cleanup function", cleanupStack.length)
-//       fn()
-//     }
-
-//     contextStack.pop()
-//     cleanupStack.pop()
-//     isDisposed = true
-//   }
-
-//   // Add the dispose function to the parent's cleanup functions
-//   if (parentCleanupFns) {
-//     console.log(
-//       "Adding dispose function to parent cleanup stack from",
-//       cleanupStack.length
-//     )
-//     parentCleanupFns.unshift(dispose)
-//   } else {
-//     console.log("Parent cleanup stack is missing/empty")
-//   }
-
-//   return { node: fragment, dispose }
-// }
-
-// Render function to mount components
+/**
+ * Renders a component into a specified container element.
+ *
+ * @param component - The component function to render.
+ * @param container - The HTML element to render the component into.
+ * @returns A function that, when called, will unmount the rendered component and clean up resources.
+ *
+ * @remarks
+ * The function creates a component using `createComponent`, and appends it to the container
+ * between two comment nodes (`pulse` and `/pulse`). The returned function can be used to
+ * unmount the component, remove the comment nodes, and clean up resources.
+ *
+ * @example
+ * ```typescript
+ * const unmount = render(MyComponent, document.getElementById('app'));
+ * // To unmount the component later:
+ * unmount();
+ * ```
+ */
 export function render(component: ComponentFunction, container: HTMLElement) {
   const { node, dispose } = createComponent(component, null, [])
   const startMarker = document.createComment("pulse")
