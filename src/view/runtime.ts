@@ -172,8 +172,8 @@ export function appendChild(
 
 function reactiveChildContent(parent: Node, worker: () => any) {
   // Create boundary markers
-  let start = document.createComment("start")
-  let end = document.createComment("end")
+  let start = document.createComment("")
+  let end = document.createComment("")
   parent.appendChild(start)
   parent.appendChild(end)
 
@@ -343,8 +343,8 @@ export function createComponent(
 // Render function to mount components
 export function render(component: ComponentFunction, container: HTMLElement) {
   const { node, dispose } = createComponent(component, null, [])
-  const startMarker = document.createComment("start of component")
-  const endMarker = document.createComment("end of component")
+  const startMarker = document.createComment("pulse")
+  const endMarker = document.createComment("/pulse")
 
   container.appendChild(startMarker)
   container.appendChild(node)

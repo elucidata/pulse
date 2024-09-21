@@ -37,6 +37,9 @@ const MyView => () =>
   html`<div class="Card" --padding="0"> ... </div>`
 ```
 
+- How would this work in (T|J)SX?
+
+
 ## Promises and Signals or Observables
 
 Create some kind of AsyncSignal that wraps a Promise and updates when the promise resolves/rejects.
@@ -64,44 +67,42 @@ const App = () => {
 - Does it make more sense to wrap a Promise in an Observable instead of a Signal?
 
 
-## Scoped CSS Widgets
+## Widgets as WebComponents
 
 ```jsx
+registerWidget('x-message', widget.div.Message.css`
+  border-radius: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: dodgerblue;
+  color: white;
+`)
+
 const View = () => html`
-  <${Root} cssFlags=${{ isLoading: loadingSignal }}>
-    <${Show} when=${loadingSignal}>
-      <p>Loading...</p>
-    <//>
-    <div class="nested">
-      Hello there.
-    </div>
-  <//>
-`
-
-const ViewJSX = () => (
-  <Root cssFlags={{ isLoading: loadingSignal }}>
-    <Show when={loadingSignal}>
-      <p>Loading...</p>
-    </Show>
-    <div class="nested">
-      Hello there.
-    </div>
-  </Root>
-)
-
-const Root = widget.div.View.css`
-  padding: 1rem;
-
-  &.isLoading {
-    color: red;
-  }
-
-  .nested {
-    padding: 1rem;
-    border-left: .25rem solid silver;
-  }
+  <div>
+    <x-message>I'm a message</x-message>
+  </div>
 `
 ```
+
+- Why widgets, why not any PulseComponent (`ComponentFunction`)?
+
+```jsx
+
+const Message = (props, children) =>
+  // raw syntax
+  h(MessageRoot, props, children)
+
+const MessageRoot = widget.div.Message.css`
+  border-radius: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: dodgerblue;
+  color: white;
+`
+
+registerWebComponent("x-message", Message)
+```
+
+- How can we declare what props to connect and send through as props (wrapped in Signals, ideally)?
 
 
 ## Integrated View Transitions
@@ -110,7 +111,7 @@ Automatic view transition support. Whenever a (named?) change occurs, wrap chang
 
 - Is it global?
   - If not, how do I opt-in for some components/elements?
-- Should PV create transition names automatically?
+- Should Pulse create transition names automatically?
 - How do I specify a (custom) view transition name?
 
 ```js
