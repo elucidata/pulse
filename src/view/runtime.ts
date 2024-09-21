@@ -74,6 +74,8 @@ export function h(
     for (const [key, value] of Object.entries(props)) {
       if (key === "children") {
         continue
+      } else if (key == "className" || key == "class") {
+        el.className = value as string
       } else if (key.startsWith("on")) {
         const eventName = key.slice(2).toLowerCase()
         el.addEventListener(eventName, value)

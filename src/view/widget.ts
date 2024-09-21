@@ -4,6 +4,7 @@ import { ComponentFunction } from "./types"
 
 type WidgetProps = {
   class?: string
+  className?: string
   cssFlags?: any
 }
 
@@ -21,48 +22,35 @@ type RootWidget = {
 
 type Widget = { css: CssFunction } & { [key: string]: Widget }
 
-const cssTagBuilder = (tag: string, extraClasses: string): CssFunction => {
-  return (
-    styles: TemplateStringsArray,
-    ...expressions: any[]
-  ): ComponentFunction<{}> & { className: string } => {
-    const className = withAutoScope(() => css(styles, ...expressions))
-
-    // Combine extra classes with the generated class name
-    const classNameWithExtras = `${className} ${extraClasses}`.trim()
-
-    return Object.assign(
-      (props: WidgetProps, children: any[]) => {
-        return h(
-          tag,
-          {
-            ...props,
-            class: classNames(
-              props.class ?? "",
-              classNameWithExtras,
-              props.cssFlags ?? ""
-            ),
-          },
-          ...children
-        )
-      },
-      {
-        className: classNameWithExtras,
-      }
-    )
-  }
-}
-
 /**
- * A proxy object that allows to build a widget tree with CSS-in-JS support.
- * The proxy object has a property for each HTML tag, and each property is a
- * proxy object that allows to chain CSS classes.
+ * The `widget` object is a proxy-based utility for creating styled components with dynamic tags and class names.
  *
+ * Usage:
+ *
+ * ```typescript
+ * widget.[tagname].[extraClassnames*].css`styles`
+ * ```
+ *
+ * - `[tagname]`: Optional HTML tag name to be used for the component (defaults to `div`).
+ * - `[extraClassnames*]`: Optional additional class names to be appended to the component.
+ * - `css`: A tagged template function to define the component's styles.
+ *
+ * Example:
+ *
+ * ```typescript
+ * const styledDiv = widget.div.myClass.anotherClass.css`
+ *   color: red;
+ *   background: blue;
+ * `;
+ * ```
+ *
+ * This will create a `div` element with the classes `myClass` and `anotherClass`, and apply the specified styles.
  */
 export const widget: RootWidget = new Proxy(
   {
     extend() {
-      // throw new Error("Not implemented")
+      // TODO: Accept a ComponentFunction to extend the widget object instead of a tag name
+      // EXAMPLE: widget.extend(Label).ExtraClass.css` color: red; `
     },
     css: (
       styles: TemplateStringsArray,
@@ -88,13 +76,11 @@ export const widget: RootWidget = new Proxy(
         },
       }
 
-      // Create the inner proxy
       const innerProxy: Widget = new Proxy(innerWidget as Widget, {
         get(innerTarget, innerProp: string) {
           if (innerProp in innerTarget) {
             return (innerTarget as any)[innerProp]
           }
-          // Accumulate extra classes
           extraClasses += ` ${innerProp}`
           // Return the same proxy to allow chaining
           return innerProxy
@@ -106,27 +92,32 @@ export const widget: RootWidget = new Proxy(
   }
 ) as RootWidget
 
-// const Widget = widget.div.css`
-//   display: flex;
-//  `
+const cssTagBuilder = (tag: string, extraClasses: string): CssFunction => {
+  return (
+    styles: TemplateStringsArray,
+    ...expressions: any[]
+  ): ComponentFunction<{}> & { className: string } => {
+    const className = withAutoScope(() => css(styles, ...expressions))
+    const classNameWithExtras = `${className} ${extraClasses}`.trim()
 
-// widget.div.isCrap
-
-// widget.div.isIt.Good.css` color: blue; `
-
-// Example usage
-// const Root = widget.div.css`
-//   display: flex;
-//   flex-direction: column;
-//   align-items: center;
-//   justify-content: center;
-//   height: 100vh;
-
-//   h1 {
-//     font-size: 2rem;
-//     margin-bottom: 1rem;
-//   }
-// `
-
-// const x = widget.css``
-// const y = widget.section.css``
+    return Object.assign(
+      (props: WidgetProps = {}, children: any[]) => {
+        return h(
+          tag,
+          {
+            ...props,
+            ["class"]: classNames(
+              props?.["class"] ?? props?.className ?? "",
+              classNameWithExtras,
+              props?.cssFlags ?? ""
+            ),
+          },
+          ...children
+        )
+      },
+      {
+        className: classNameWithExtras,
+      }
+    )
+  }
+}
