@@ -194,6 +194,17 @@ const App = () => {
 render(App, document.getElementById("app"))
 ```
 
+### Todo / Ideas
+
+Just to be clear, these aren't implemented yet... But I'm considering them.
+
+- **Integrated View Transitions**: Automatic view transition support.
+
+- **CSS Vars Attributes**: Pass CSS variables as attributes: 
+  
+  `<div class="Card" --padding="0"> ... </div>`
+
+- **X**: Y
 
 ## Utilities
 

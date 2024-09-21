@@ -7,9 +7,12 @@ import { ComponentFunction, Props } from "./types"
 
 export function effect(fn: EffectFunction): void {
   const dispose = baseEffect(fn)
-  if (cleanupStack.length > 0) {
-    cleanupStack[cleanupStack.length - 1]?.push(dispose)
+  if (currentCleanupFns) {
+    currentCleanupFns.push(dispose)
   }
+  // if (cleanupStack.length > 0) {
+  //   cleanupStack[cleanupStack.length - 1]?.push(dispose)
+  // }
 }
 
 // Context system
@@ -31,8 +34,8 @@ export function getContext<T>(key: any): T {
   throw new Error("Context not found for key")
 }
 
-// Lifecycle hooks
 export const cleanupStack: (() => void)[][] = []
+let currentCleanupFns: (() => void)[] | undefined
 
 export function onMount(fn: () => void | (() => void)) {
   if (cleanupStack.length === 0) {
@@ -146,14 +149,18 @@ export function appendChild(
     // Child is a component object
     parent.appendChild(child.node)
     // Collect dispose function
-    if (disposes) {
-      disposes.push(child.dispose)
-    } else {
-      // Add the dispose function to the current cleanup stack
-      if (cleanupStack.length > 0) {
-        cleanupStack[cleanupStack.length - 1]?.push(child.dispose)
-      }
+    // if (disposes) {
+    //   disposes.push(child.dispose)
+    // }
+    if (currentCleanupFns) {
+      currentCleanupFns.push(child.dispose)
     }
+    // else {
+    //   // Add the dispose function to the current cleanup stack
+    //   if (cleanupStack.length > 0) {
+    //     cleanupStack[cleanupStack.length - 1]?.push(child.dispose)
+    //   }
+    // }
   } else if (child instanceof Node) {
     parent.appendChild(child)
   } else if (child !== null && child !== undefined) {
@@ -222,8 +229,9 @@ export function createComponent(
 
   const cleanupFns: (() => void)[] = []
 
-  // Capture the parent's cleanup functions
-  const parentCleanupFns = cleanupStack[cleanupStack.length - 1]
+  // Save the previous currentCleanupFns
+  const prevCleanupFns = currentCleanupFns
+  currentCleanupFns = cleanupFns
 
   cleanupStack.push(cleanupFns)
 
@@ -235,12 +243,8 @@ export function createComponent(
     result.forEach((node) => {
       appendChild(fragment, node)
     })
-  } else if (result instanceof Node) {
-    fragment.appendChild(result)
-  } else if (result !== null && result !== undefined) {
-    fragment.appendChild(document.createTextNode(String(result)))
   } else {
-    fragment.appendChild(document.createComment(""))
+    appendChild(fragment, result)
   }
 
   let isDisposed = false
@@ -248,21 +252,91 @@ export function createComponent(
     if (isDisposed) {
       return console.warn("Component already unmounted")
     }
+
+    // Push our context onto contextStack
+    // contextStack.push(contextMap)
+
     for (const fn of cleanupFns) {
       fn()
     }
+
     contextStack.pop()
     cleanupStack.pop()
     isDisposed = true
   }
 
-  // Add the dispose function to the parent's cleanup functions
-  if (parentCleanupFns) {
-    parentCleanupFns.push(dispose)
+  // Restore previous currentCleanupFns
+  currentCleanupFns = prevCleanupFns
+
+  // Add our dispose function to the parent's cleanupFns
+  if (currentCleanupFns) {
+    currentCleanupFns.push(dispose)
   }
 
   return { node: fragment, dispose }
 }
+// export function createComponent(
+//   component: ComponentFunction,
+//   props: any,
+//   children: any[]
+// ): { node: Node; dispose: () => void } {
+//   const contextMap = new Map()
+//   contextStack.push(contextMap)
+
+//   const cleanupFns: (() => void)[] = []
+//   // Capture the parent's cleanup functions
+//   const parentCleanupFns = cleanupStack[cleanupStack.length - 1]
+//   cleanupStack.push(cleanupFns)
+
+//   const result = component(props, children)
+
+//   const fragment = document.createDocumentFragment()
+
+//   if (Array.isArray(result)) {
+//     result.forEach((node) => {
+//       appendChild(fragment, node)
+//     })
+//   } else if (result instanceof Node) {
+//     fragment.appendChild(result)
+//   } else if (result !== null && result !== undefined) {
+//     fragment.appendChild(document.createTextNode(String(result)))
+//   } else {
+//     fragment.appendChild(document.createComment(""))
+//   }
+
+//   let isDisposed = false
+//   const dispose = () => {
+//     if (isDisposed) {
+//       return console.warn("Component already unmounted")
+//     }
+//     console.log(
+//       "Disposing component with depth",
+//       cleanupStack.length,
+//       cleanupFns
+//     )
+//     for (const fn of cleanupFns) {
+//       console.log("Running cleanup function", cleanupStack.length)
+//       fn()
+//     }
+
+//     contextStack.pop()
+//     cleanupStack.pop()
+//     isDisposed = true
+//   }
+
+//   // Add the dispose function to the parent's cleanup functions
+//   if (parentCleanupFns) {
+//     console.log(
+//       "Adding dispose function to parent cleanup stack from",
+//       cleanupStack.length
+//     )
+//     parentCleanupFns.unshift(dispose)
+//   } else {
+//     console.log("Parent cleanup stack is missing/empty")
+//   }
+
+//   return { node: fragment, dispose }
+// }
 
 // Render function to mount components
 export function render(component: ComponentFunction, container: HTMLElement) {
@@ -280,13 +354,13 @@ export function render(component: ComponentFunction, container: HTMLElement) {
     if (isDisposed) {
       return console.warn("Render root already unmounted")
     }
+    dispose()
     const range = document.createRange()
     range.setStartAfter(startMarker)
     range.setEndBefore(endMarker)
     range.deleteContents()
     container.removeChild(startMarker)
     container.removeChild(endMarker)
-    dispose()
     isDisposed = true
   }
 }

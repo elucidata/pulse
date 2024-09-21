@@ -1,4 +1,5 @@
 export * from "../index"
 export * from "./observer"
+export * from "./PulseComponent"
 export * from "./useComputed"
 export * from "./useObservable"
