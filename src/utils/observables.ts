@@ -48,9 +48,13 @@ export function observable<T>(
     subscribe(run) {
       subscribers++
       if (subscribers === 1) {
-        teardown = setup((value) => {
-          s.set(value)
-        })
+        try {
+          teardown = setup((value) => {
+            s.set(value)
+          })
+        } catch (e) {
+          console.error("Error in observable setup", e)
+        }
       }
 
       const subscription = s.subscribe((value) => {
@@ -61,7 +65,11 @@ export function observable<T>(
         subscription()
         subscribers--
         if (subscribers === 0 && teardown) {
-          teardown()
+          try {
+            teardown()
+          } catch (e) {
+            console.error("Error in observable teardown", e)
+          }
           teardown = null
           s.set(undefined as any)
         }
