@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test"
+import { describe, expect, it, spyOn } from "bun:test"
 import { Signal, batch, computed, effect } from "./internals"
 
 describe("Signals Module", () => {
@@ -98,7 +98,110 @@ describe("Signals Module", () => {
 
       expect(observedValue).toBe(1) // Should remain unchanged
     })
+
+    it("should call error handler when effect throws", () => {
+      const consoleSpy = spyOn(console, "error")
+      const signal = new Signal(1)
+      let observedValue = 0
+      let errorHandlerCalled = false
+
+      const unsubscribe = effect(
+        () => {
+          observedValue = signal.value
+          throw new Error("Test Error")
+        },
+        (error) => {
+          errorHandlerCalled = true
+        }
+      )
+
+      expect(observedValue).toBe(1)
+      expect(consoleSpy).not.toHaveBeenCalled()
+      expect(errorHandlerCalled).toBeTrue()
+
+      unsubscribe()
+
+      signal.value = 2
+
+      expect(observedValue).toBe(1) // Should remain unchanged
+
+      consoleSpy.mockRestore()
+    })
+
+    it("should log errors when effect cleanup throws", () => {
+      const consoleSpy = spyOn(console, "error")
+      const signal = new Signal(1)
+      let observedValue = 0
+      let errorHandlerCalled = false
+
+      const unsubscribe = effect(
+        () => {
+          observedValue = signal.value
+
+          return () => {
+            throw new Error("Test Cleanup Error")
+          }
+        },
+        (error) => {
+          errorHandlerCalled = true
+        }
+      )
+
+      expect(observedValue).toBe(1)
+      expect(consoleSpy).not.toHaveBeenCalled()
+      expect(errorHandlerCalled).toBeFalse()
+
+      unsubscribe()
+
+      expect(errorHandlerCalled).toBeFalse()
+      expect(consoleSpy).toHaveBeenCalled()
+
+      consoleSpy.mockRestore()
+    })
+
+    it("should not run when disposed", () => {
+      const signal = new Signal(1)
+      let observedValue = 0
+
+      const unsubscribe = effect(() => {
+        observedValue = signal.value
+      })
+
+      expect(observedValue).toBe(1)
+
+      unsubscribe()
+
+      signal.value = 2
+
+      expect(observedValue).toBe(1) // Should remain unchanged
+    })
+
+    it("should stop responding to changes after error throws", () => {
+      const signal = new Signal(1)
+      let observedValue = 0
+      let errorHandled = false
+
+      const unsubscribe = effect(
+        () => {
+          observedValue = signal.value
+          throw new Error("Test Error")
+        },
+        (error) => {
+          errorHandled = true
+        }
+      )
+
+      expect(observedValue).toBe(1)
+      expect(errorHandled).toBeTrue()
+
+      signal.value = 2
+
+      expect(observedValue).toBe(1) // Should remain unchanged
+
+      unsubscribe()
+    })
   })
+
   describe("Effect Nesting", () => {
     it("should handle nested effects correctly", () => {
       const signal = new Signal(1)
@@ -293,6 +396,60 @@ describe("Signals Module", () => {
 
       expect(rootCleanupCalled).toBe(2)
       expect(nestedCleanupCalled).toBe(3)
+    })
+
+    it("should call cleanup functions in the correct order", () => {
+      const signal = new Signal(1)
+      let cleanupOrder = ""
+
+      const unsubscribe = effect(() => {
+        effect(() => {
+          effect(() => {
+            cleanupOrder += "3"
+          })
+
+          return () => {
+            cleanupOrder += "2"
+          }
+        })
+
+        return () => {
+          cleanupOrder += "1"
+        }
+      })
+
+      unsubscribe()
+
+      expect(cleanupOrder).toBe("321")
+    })
+
+    it("should call effect and cleanup functions in expected order", () => {
+      const signal = new Signal(1)
+      let cleanupOrder = ""
+
+      const unsubscribe = effect(() => {
+        effect(() => {
+          effect(() => {
+            cleanupOrder += "3"
+          })
+
+          return () => {
+            cleanupOrder += "2"
+          }
+        })
+
+        effect(() => {
+          cleanupOrder += "4"
+        })
+
+        return () => {
+          cleanupOrder += "1"
+        }
+      })
+
+      unsubscribe()
+
+      expect(cleanupOrder).toBe("3421")
     })
   })
 

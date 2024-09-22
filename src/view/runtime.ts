@@ -1,3 +1,63 @@
+// TODO: Move away from module state add new RenderContext class
+
+export class RenderContext {
+  contextStack: Map<any, any>[] = []
+  cleanupStack: (() => void)[][] = []
+  currentCleanupFns?: (() => void)[]
+
+  constructor() {
+    this.currentCleanupFns = []
+  }
+
+  static current: RenderContext | null = null
+}
+
+// class RenderContext {
+//   contextStack: Map<any, any>[]
+//   cleanupFns: (() => void)[]
+
+//   constructor() {
+//     this.contextStack = [new Map()]
+//     this.cleanupFns = []
+//   }
+
+//   pushContext() {
+//     this.contextStack.push(new Map())
+//   }
+//   popContext() {
+//     this.contextStack.pop()
+//   }
+
+//   setContext(key: any, value: any) {
+//     this.contextStack[this.contextStack.length - 1]!.set(key, value)
+//   }
+
+//   getContext<T>(key: any): T {
+//     return this.contextStack[this.contextStack.length - 1]!.get(key)
+//   }
+
+//   onMount(fn: () => void | (() => void)) {
+//     queueMicrotask(() => {
+//       const unmount = fn()
+//       if (unmount) {
+//         this.onUnmount(unmount)
+//       }
+//     })
+//   }
+
+//   onUnmount(fn: () => void) {
+//     this.cleanupFns.push(fn)
+//   }
+
+//   cleanup() {
+//     for (const fn of this.cleanupFns) {
+//       fn()
+//     }
+//   }
+
+//   static current: RenderContext | null = null
+// }
+
 import {
   effect as baseEffect,
   EffectFunction,
@@ -15,6 +75,10 @@ export function effect(fn: EffectFunction): void {
 export const contextStack: Map<any, any>[] = []
 
 export function setContext(key: any, value: any) {
+  // if (!ComponentInstance.current) {
+  //   throw new Error("setContext must be called within a component")
+  // }
+  // ComponentInstance.current.setContext(key, value)
   if (contextStack.length === 0) {
     throw new Error("setContext must be called within a component")
   }
@@ -192,11 +256,79 @@ function reactiveChildContent(parent: Node, worker: () => any) {
   })
 }
 
+// TODO: Encapsulate component instance management
+type Disposer = () => void
+class ComponentInstance {
+  progenitor: ComponentFunction
+  parent: ComponentInstance | null = null
+  children: ComponentInstance[] = []
+  node: Node
+
+  protected contextMap?: Map<any, any>
+  protected disposeFns?: Set<Disposer>
+
+  constructor(parent: ComponentInstance | null) {
+    this.parent = parent
+    parent?.children.push(this)
+  }
+
+  getContext<T>(key: any): T {
+    if (!this.contextMap || !this.contextMap.has(key)) {
+      if (!this.parent) {
+        throw new Error("Context not found for key")
+      }
+      return this.parent.getContext(key)
+    }
+    return this.contextMap.get(key)
+  }
+  setContext(key: any, value: any) {
+    if (!this.contextMap) {
+      this.contextMap = new Map()
+    }
+    this.contextMap.set(key, value)
+  }
+
+  addDisposer(dispose: () => void) {
+    if (!this.disposeFns) {
+      this.disposeFns = new Set()
+    }
+    this.disposeFns.add(dispose)
+  }
+
+  dispose() {
+    // clone the children array to avoid mutation during disposal
+    Array.from(this.children).forEach((child) => child.dispose())
+    this.disposeFns?.forEach((dispose) => dispose())
+    this.disposeFns?.clear()
+    this.contextMap?.clear()
+    this.parent?.children.splice(this.parent.children.indexOf(this), 1)
+    console.assert(
+      this.children.length === 0,
+      "Component still has children after disposal"
+    )
+  }
+
+  static current: ComponentInstance | null = null
+  static withNewChild<T>(worker: (current: ComponentInstance) => T) {
+    const prevInstance = ComponentInstance.current
+    const newInstance = new ComponentInstance(prevInstance)
+    ComponentInstance.current = newInstance
+    const result = worker(newInstance)
+    ComponentInstance.current = prevInstance
+    return result
+  }
+}
+
+ComponentInstance.withNewChild((instance) => {
+  instance
+})
+
 export function createComponent(
   component: ComponentFunction,
   props: any,
   children: any[]
 ): { node: Node; dispose: () => void } {
+  // create a ComponentInstance object
   const contextMap = new Map()
   contextStack.push(contextMap)
 
@@ -262,6 +394,8 @@ export function createComponent(
  * ```
  */
 export function render(component: ComponentFunction, container: HTMLElement) {
+  const renderContext = new RenderContext()
+  RenderContext.current = renderContext
   const { node, dispose } = createComponent(component, null, [])
   const startMarker = document.createComment("pulse")
   const endMarker = document.createComment("/pulse")
@@ -271,6 +405,7 @@ export function render(component: ComponentFunction, container: HTMLElement) {
   container.appendChild(endMarker)
 
   let isDisposed = false
+  RenderContext.current = null
 
   return () => {
     if (isDisposed) {

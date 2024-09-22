@@ -1,4 +1,5 @@
 export type EffectFunction = () => void | (() => void)
+export type EffectErrorFunction = (error: any, source?: Computation) => void
 
 export interface ReadonlySignal<T> {
   readonly value: T
@@ -61,9 +62,9 @@ export class Signal<T> implements ReadonlySignal<T> {
 }
 
 export class Computation {
-  static lastId = 0
+  protected static lastId = 0
 
-  readonly id = Computation.lastId++
+  readonly id = (Computation.lastId++).toString(36)
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
   private _isRunning: boolean = false
@@ -72,13 +73,16 @@ export class Computation {
   onInvalidate: (() => void) | null = null
   parentComputation: Computation | null
   childComputations: Set<Computation> = new Set()
+  errorFn: EffectErrorFunction
 
   constructor(
     fn: EffectFunction,
-    parentComputation: Computation | null = null
+    parentComputation: Computation | null = null,
+    onError?: EffectErrorFunction
   ) {
     this.fn = fn
     this.parentComputation = parentComputation
+    this.errorFn = onError || Computation.globalErrorHandler
     this.run()
   }
 
@@ -98,6 +102,9 @@ export class Computation {
       } else {
         this._fnCleanup = void 0
       }
+    } catch (error) {
+      this.errorFn?.(error, this)
+      this.cleanup() // clear from parent?
     } finally {
       this._isRunning = false
       Computation.stack.pop()
@@ -128,8 +135,14 @@ export class Computation {
     // this.childComputations.clear()
 
     if (this._fnCleanup) {
-      this._fnCleanup()
-      this._fnCleanup = void 0
+      try {
+        this._fnCleanup()
+        this._fnCleanup = void 0
+      } catch (error) {
+        if (typeof error === "object")
+          Object.assign(error, { computation: this })
+        console.error("Cleanup Error:", error)
+      }
     }
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
     this.dependencies.clear()
@@ -140,9 +153,18 @@ export class Computation {
     this._isCleaning = false
   }
 
+  protected static globalErrorHandler = (error: any, source?: Computation) => {
+    console.error("Unhandled Computation Error:", error, {
+      computation: source,
+    })
+  }
+  static setGlobalErrorHandler(handler: (error: any) => void) {
+    Computation.globalErrorHandler = handler
+  }
+
   static current: Computation | null = null
-  static stack: Computation[] = []
   static isBatching = false
+  static stack: Computation[] = []
   static pending = new Set<Computation>()
 }
 
@@ -150,11 +172,11 @@ export class ComputedSignal<T> implements ReadonlySignal<T> {
   private _signal: Signal<T>
   readonly cleanup: () => void
 
-  constructor(fn: () => T) {
+  constructor(fn: () => T, onError?: EffectErrorFunction) {
     this._signal = new Signal<T>(undefined as any)
     this.cleanup = effect(() => {
       this._signal.value = fn()
-    })
+    }, onError)
   }
 
   get value(): T {
@@ -178,17 +200,23 @@ export function signal<T>(value: T): Signal<T> {
   return new Signal(value)
 }
 
-export function effect(fn: EffectFunction): () => void {
+export function effect(
+  fn: EffectFunction,
+  onError?: (error: any) => void
+): () => void {
   const parentComputation = Computation.current
-  const computation = new Computation(fn, parentComputation)
+  const computation = new Computation(fn, parentComputation, onError)
   if (parentComputation) {
     parentComputation.childComputations.add(computation)
   }
   return () => computation.cleanup()
 }
 
-export function computed<T>(fn: () => T): ReadonlySignal<T> {
-  return new ComputedSignal(fn)
+export function computed<T>(
+  fn: () => T,
+  onError?: (error: any) => void
+): ReadonlySignal<T> {
+  return new ComputedSignal(fn, onError)
 }
 
 export function batch(fn: () => void) {

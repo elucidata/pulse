@@ -110,4 +110,64 @@ describe("widget", () => {
       )
     )
   })
+
+  it("should allow extending a widget", () => {
+    const styles = ["color: red;"]
+    const Component = widget.div.Parent.css(styles as any)
+    const ExtendedComponent = widget.extend(Component).Child.css`color: blue;`
+    const props = { class: "custom-class" }
+    const children = ["Child content"]
+
+    const result = ExtendedComponent(props, children)
+
+    expect(result).toBeInstanceOf(Node)
+    const resultHTML = getHTML(result)
+    const expectedHTML = getHTML(
+      h(
+        "div",
+        {
+          ...props,
+          class: classNames(
+            props.class,
+            ExtendedComponent.className,
+            Component.className
+          ),
+        },
+        ...children
+      )
+    )
+
+    expect(resultHTML).toEqual(expectedHTML)
+    expect(resultHTML).toContain("custom-class")
+    expect(resultHTML).toContain("Parent")
+    expect(resultHTML).toContain("Child")
+    // console.log(resultHTML)
+  })
+
+  it("should allow extending a plain component", () => {
+    const Component = (props: any) => h("div", props, "Child content")
+    const ExtendedComponent = widget.extend(Component).Child.css`color: blue;`
+    const props = { class: "custom-class" }
+    const children = ["Child content"]
+
+    const result = ExtendedComponent(props, children)
+
+    expect(result).toBeInstanceOf(Node)
+    const resultHTML = getHTML(result)
+    const expectedHTML = getHTML(
+      h(
+        "div",
+        {
+          ...props,
+          class: classNames(props.class, ExtendedComponent.className),
+        },
+        ...children
+      )
+    )
+
+    expect(resultHTML).toEqual(expectedHTML)
+    expect(resultHTML).toContain("custom-class")
+    expect(resultHTML).toContain("Child")
+    // console.log(resultHTML)
+  })
 })

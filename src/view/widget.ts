@@ -15,7 +15,7 @@ type CssFunction<T = {}> = (
 
 type RootWidget = {
   css: CssFunction
-  extend: () => void
+  extend: (source: ComponentFunction) => Widget
 } & {
   [K in keyof HTMLElementTagNameMap]: Widget
 }
@@ -48,15 +48,14 @@ type Widget = { css: CssFunction } & { [key: string]: Widget }
  */
 export const widget: RootWidget = new Proxy(
   {
-    extend() {
-      // TODO: Accept a ComponentFunction to extend the widget object instead of a tag name
-      // EXAMPLE: widget.extend(Label).ExtraClass.css` color: red; `
+    extend(source: ComponentFunction): Widget {
+      return createBuilderProxy(source)
     },
     css: (
       styles: TemplateStringsArray,
       ...expressions: any[]
     ): ComponentFunction => {
-      return cssTagBuilder("div", "")(styles, ...expressions)
+      return componentFactory("div", "")(styles, ...expressions)
     },
   } as RootWidget,
   {
@@ -64,35 +63,46 @@ export const widget: RootWidget = new Proxy(
       if (prop in target) {
         return (target as any)[prop]
       }
-      const tag = prop
-      let extraClasses = ""
-
-      const innerWidget = {
-        css: (
-          styles: TemplateStringsArray,
-          ...expressions: any[]
-        ): ComponentFunction => {
-          return cssTagBuilder(tag, extraClasses)(styles, ...expressions)
-        },
-      }
-
-      const innerProxy: Widget = new Proxy(innerWidget as Widget, {
-        get(innerTarget, innerProp: string) {
-          if (innerProp in innerTarget) {
-            return (innerTarget as any)[innerProp]
-          }
-          extraClasses += ` ${innerProp}`
-          // Return the same proxy to allow chaining
-          return innerProxy
-        },
-      }) as Widget
-
-      return innerProxy
+      return createBuilderProxy(prop)
     },
   }
 ) as RootWidget
 
-const cssTagBuilder = (tag: string, extraClasses: string): CssFunction => {
+function createBuilderProxy(prop: string | ComponentFunction): Widget {
+  const tag = prop
+  let extraClasses: string[] = []
+
+  const builderProxy: Widget = new Proxy(
+    {
+      css: (
+        styles: TemplateStringsArray,
+        ...expressions: any[]
+      ): ComponentFunction => {
+        return componentFactory(tag, extraClasses.join(" "))(
+          styles,
+          ...expressions
+        )
+      },
+    },
+    {
+      get(target, prop: string) {
+        if (prop in target) {
+          return (target as any)[prop]
+        }
+        extraClasses.push(prop)
+        // Return the same proxy to allow chaining
+        return builderProxy
+      },
+    }
+  ) as Widget
+
+  return builderProxy
+}
+
+const componentFactory = (
+  tag: string | ComponentFunction,
+  extraClasses: string
+): CssFunction => {
   return (
     styles: TemplateStringsArray,
     ...expressions: any[]
@@ -101,17 +111,16 @@ const cssTagBuilder = (tag: string, extraClasses: string): CssFunction => {
     const classNameWithExtras = `${className} ${extraClasses}`.trim()
 
     return Object.assign(
-      (props: WidgetProps = {}, children: any[]) => {
+      (props: WidgetProps = {}, ...children: any[]) => {
         return h(
           tag,
-          {
-            ...props,
-            ["class"]: classNames(
-              props?.["class"] ?? props?.className ?? "",
+          Object.assign({}, props, {
+            class: classNames(
+              props.class ?? props.className ?? "",
               classNameWithExtras,
-              props?.cssFlags ?? ""
+              props.cssFlags ?? ""
             ),
-          },
+          }),
           ...children
         )
       },
@@ -121,3 +130,11 @@ const cssTagBuilder = (tag: string, extraClasses: string): CssFunction => {
     )
   }
 }
+
+// const Label = widget.label.BlueBoy.css` color: blue; `
+// //@ts-ignore
+// console.log("🔵", Label({}, "Hello").outerHTML)
+
+// const RedLabel = widget.extend(Label).RedBoy.css` color: red; `
+// //@ts-ignore
+// console.log("🔴", RedLabel({}, "Goodbye").outerHTML, RedLabel.toString())
