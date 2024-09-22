@@ -139,8 +139,8 @@ export class Computation {
         this._fnCleanup()
         this._fnCleanup = void 0
       } catch (error) {
-        if (typeof error === "object")
-          Object.assign(error, { computation: this })
+        // if (typeof error === "object")
+        //   Object.assign(error, { computation: this }) // if logged, it'd be a memory leak
         console.error("Cleanup Error:", error)
       }
     }
@@ -154,9 +154,7 @@ export class Computation {
   }
 
   protected static globalErrorHandler = (error: any, source?: Computation) => {
-    console.error("Unhandled Computation Error:", error, {
-      computation: source,
-    })
+    console.error("Unhandled Computation Error:", error)
   }
   static setGlobalErrorHandler(handler: (error: any) => void) {
     Computation.globalErrorHandler = handler

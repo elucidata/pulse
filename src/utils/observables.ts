@@ -57,12 +57,12 @@ export function observable<T>(
         }
       }
 
-      const subscription = s.subscribe((value) => {
+      const unsubscribe = s.subscribe((value) => {
         if (value !== undefined) run(value)
       })
 
       return () => {
-        subscription()
+        unsubscribe()
         subscribers--
         if (subscribers === 0 && teardown) {
           try {
