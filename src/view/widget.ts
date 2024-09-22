@@ -116,9 +116,9 @@ const componentFactory = (
           tag,
           Object.assign({}, props, {
             class: classNames(
-              props.class ?? props.className ?? "",
+              props?.class ?? props?.className ?? "",
               classNameWithExtras,
-              props.cssFlags ?? ""
+              props?.cssFlags ?? ""
             ),
           }),
           ...children
