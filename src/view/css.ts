@@ -63,24 +63,29 @@ export function css(
   return className
 }
 
+type Truthy = string | number | boolean | null | undefined
+type ClassValue = string | Record<string, Truthy> | undefined | null | false
+
 /**
  * Accumulate class names from the given arguments. If an argument is an object,
  * it will be treated as a map of class names to boolean values, where only the
  * keys with truthy values will be included.
  */
-export function classNames(
-  ...classes: (string | Record<string, boolean>)[]
-): string {
+export function classNames(...classes: ClassValue[]): string {
   return classes
     .map((cls) => {
-      if (typeof cls === "string") {
+      if (typeof cls === "string" && cls !== "") {
         return cls.trim()
+      } else if (typeof cls === "object" && cls !== null) {
+        return Object.entries(cls)
+          .filter(([, value]) => value)
+          .map(([key]) => String(key).trim())
+          .join(" ")
+      } else {
+        return ""
       }
-      return Object.entries(cls)
-        .filter(([, value]) => value)
-        .map(([key]) => String(key).trim())
-        .join(" ")
     })
+    .filter(Boolean)
     .join(" ")
     .trim()
 }

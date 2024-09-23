@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, mock, jest, spyOn } from "bun:test"
 
-import { css, styleCache, withAutoScope } from "./css"
+import { css, styleCache, withAutoScope, classNames } from "./css"
 
 const expectStyleToContain = (className: string, style: string) => {
   if (document.adoptedStyleSheets) {
@@ -106,5 +106,27 @@ describe("css function", () => {
     `
 
     expectStyleToContain(className, "color: blue;")
+  })
+})
+
+describe("classNames function", () => {
+  it("should return a string with all the class names", () => {
+    const result = classNames("class1", "class2", "class3")
+    expect(result).toBe("class1 class2 class3")
+  })
+
+  it("should ignore falsy values", () => {
+    const result = classNames("class1", false, "class2", null, "class3")
+    expect(result).toBe("class1 class2 class3")
+  })
+
+  it("should ignore empty strings", () => {
+    const result = classNames("class1", "", "class2", "class3")
+    expect(result).toBe("class1 class2 class3")
+  })
+
+  it("should handle objects", () => {
+    const result = classNames("class1", { class2: true, class3: false })
+    expect(result).toBe("class1 class2")
   })
 })

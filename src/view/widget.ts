@@ -55,7 +55,7 @@ export const widget: RootWidget = new Proxy(
       styles: TemplateStringsArray,
       ...expressions: any[]
     ): ComponentFunction => {
-      return componentFactory("div", "")(styles, ...expressions)
+      return componentFactory("div", "", styles, ...expressions)
     },
   } as RootWidget,
   {
@@ -78,7 +78,9 @@ function createBuilderProxy(prop: string | ComponentFunction): Widget {
         styles: TemplateStringsArray,
         ...expressions: any[]
       ): ComponentFunction => {
-        return componentFactory(tag, extraClasses.join(" "))(
+        return componentFactory(
+          tag,
+          extraClasses.join(" "),
           styles,
           ...expressions
         )
@@ -99,42 +101,33 @@ function createBuilderProxy(prop: string | ComponentFunction): Widget {
   return builderProxy
 }
 
-const componentFactory = (
+function componentFactory(
   tag: string | ComponentFunction,
-  extraClasses: string
-): CssFunction => {
-  return (
-    styles: TemplateStringsArray,
-    ...expressions: any[]
-  ): ComponentFunction<{}> & { className: string } => {
-    const className = withAutoScope(() => css(styles, ...expressions))
-    const classNameWithExtras = `${className} ${extraClasses}`.trim()
+  extraClasses: string,
+  styles: TemplateStringsArray,
+  ...expressions: any[]
+): ComponentFunction<{}> & {
+  className: string
+} {
+  const className = withAutoScope(() => css(styles, ...expressions))
+  const classNameWithExtras = `${className} ${extraClasses}`.trim()
 
-    return Object.assign(
-      (props: WidgetProps = {}, ...children: any[]) => {
-        return h(
-          tag,
-          Object.assign({}, props, {
-            class: classNames(
-              props?.class ?? props?.className ?? "",
-              classNameWithExtras,
-              props?.cssFlags ?? ""
-            ),
-          }),
-          ...children
-        )
-      },
-      {
-        className: classNameWithExtras,
-      }
+  function CssComponent(props: WidgetProps = {}, ...children: any[]) {
+    return h(
+      tag,
+      Object.assign({}, props, {
+        class: classNames(
+          props?.class ?? "",
+          props?.className ?? "",
+          classNameWithExtras,
+          props?.cssFlags ?? ""
+        ),
+      }),
+      ...children
     )
   }
+
+  return Object.assign(CssComponent, {
+    className: classNameWithExtras,
+  })
 }
-
-// const Label = widget.label.BlueBoy.css` color: blue; `
-// //@ts-ignore
-// console.log("🔵", Label({}, "Hello").outerHTML)
-
-// const RedLabel = widget.extend(Label).RedBoy.css` color: red; `
-// //@ts-ignore
-// console.log("🔴", RedLabel({}, "Goodbye").outerHTML, RedLabel.toString())
