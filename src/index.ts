@@ -1,1 +1,10 @@
-export { Signal, batch, computed, effect, event, signal } from "./internals"
+export {
+  Signal,
+  batch,
+  computed,
+  effect,
+  event,
+  signal,
+  isReadonlySignal,
+  ReadonlySignal,
+} from "./internals"

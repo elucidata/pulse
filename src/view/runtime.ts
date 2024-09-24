@@ -5,60 +5,102 @@ import {
 } from "../internals"
 import { ComponentFunction, Props } from "./types"
 
+/*
+
+Known Issues:
+- The lifecycle methods are not working as expected. 
+  - The cleanup functions are not being called when the component is unmounted. (or maybe there queue until the rende root is unmounted -- haven't tracked it down yet)
+*/
+
+// Module-level variable to track the current RenderRoot
+let currentRenderRoot: RenderRoot | null = null
+
+// RenderRoot class encapsulating per-rendering state
+class RenderRoot {
+  contextStack: Map<any, any>[] = []
+  cleanupStack: (() => void)[][] = []
+  currentCleanupFns: (() => void)[] | undefined
+  // Keep track of the current ComponentInstance
+  currentInstance: ComponentInstance | null = null
+}
+
+// Updated effect function
 export function effect(fn: EffectFunction): void {
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error("effect must be called within a render context")
+  }
   const dispose = baseEffect(fn)
-  if (currentCleanupFns) {
-    currentCleanupFns.push(dispose)
+  if (root.currentCleanupFns) {
+    root.currentCleanupFns.push(dispose)
   }
 }
 
-export const contextStack: Map<any, any>[] = []
-
+// Updated context functions
 export function setContext(key: any, value: any) {
-  if (contextStack.length === 0) {
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error("setContext must be called within a render context")
+  }
+  if (root.contextStack.length === 0) {
     throw new Error("setContext must be called within a component")
   }
-  contextStack[contextStack.length - 1]?.set(key, value)
+  root.contextStack[root.contextStack.length - 1]?.set(key, value)
 }
 
 export function getContext<T>(key: any): T {
-  for (let i = contextStack.length - 1; i >= 0; i--) {
-    if (contextStack[i]?.has(key)) {
-      return contextStack[i]?.get(key)
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error("getContext must be called within a render context")
+  }
+  for (let i = root.contextStack.length - 1; i >= 0; i--) {
+    if (root.contextStack[i]?.has(key)) {
+      return root.contextStack[i]?.get(key)
     }
   }
   throw new Error("Context not found for key")
 }
 
-export const cleanupStack: (() => void)[][] = []
-let currentCleanupFns: (() => void)[] | undefined
-
+// Updated cleanup functions
 export function onMount(fn: () => void | (() => void)) {
-  if (cleanupStack.length === 0) {
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error("onMount must be called within a render context")
+  }
+  if (root.cleanupStack.length === 0) {
     throw new Error("onMount must be called within a component")
   }
   queueMicrotask(() => {
     const unmount = fn()
     if (unmount) {
-      onUnmount(unmount)
+      onUnmount(unmount, root)
     }
   })
 }
 
-/** @deprecated use a clean up function return from onMount instead */
-export function onUnmount(fn: () => void) {
-  if (cleanupStack.length === 0) {
+/** @deprecated Use return value of onMount for clean up functions */
+export function onUnmount(fn: () => void, activeRoot?: RenderRoot) {
+  const root = activeRoot || currentRenderRoot
+  if (!root) {
+    throw new Error("onUnmount must be called within a render context")
+  }
+  if (root.cleanupStack.length === 0) {
     throw new Error("onUnmount must be called within a component")
   }
-  cleanupStack[cleanupStack.length - 1]?.push(fn)
+  root.cleanupStack[root.cleanupStack.length - 1]?.push(fn)
 }
 
-// JSX-compatible createElement function
+// Updated h function without changing its signature
 export function h(
   tag: string | ComponentFunction,
   props: Props | null,
   ...children: any[]
 ): Node {
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error("h must be called within a render context")
+  }
+
   if (typeof tag === "function") {
     // Component function
     const { node } = createComponent(tag, props, children)
@@ -127,14 +169,19 @@ function reactiveAttributeEffect(
   })
 }
 
-// Helper function to append children to a parent node
+// Updated appendChild function
 export function appendChild(
   parent: Node,
   child: any,
-  disposes?: (() => void)[]
+  activeRoot?: RenderRoot
 ): void {
+  const root = activeRoot || currentRenderRoot
+  if (!root) {
+    throw new Error("appendChild must be called within a render context")
+  }
+
   if (Array.isArray(child)) {
-    child.forEach((c) => appendChild(parent, c, disposes))
+    child.forEach((c) => appendChild(parent, c))
   } else if (typeof child === "function") {
     reactiveChildContent(parent, () => child())
   } else if (isReadonlySignal(child)) {
@@ -147,8 +194,8 @@ export function appendChild(
   ) {
     // Child is a component object
     parent.appendChild(child.node)
-    if (currentCleanupFns) {
-      currentCleanupFns.push(child.dispose)
+    if (root.currentCleanupFns) {
+      root.currentCleanupFns.push(child.dispose)
     }
   } else if (child instanceof Node) {
     parent.appendChild(child)
@@ -157,7 +204,29 @@ export function appendChild(
   }
 }
 
+function inCurrentRenderRoot<T>(fn: () => T, activeRoot?: RenderRoot): T {
+  const root = activeRoot || currentRenderRoot
+  if (!root) {
+    throw new Error("Function must be called within a render context")
+  }
+  const prevRoot = currentRenderRoot
+  currentRenderRoot = root
+  try {
+    const result = fn()
+    return result
+  } finally {
+    currentRenderRoot = prevRoot
+  }
+}
+
 function reactiveChildContent(parent: Node, worker: () => any) {
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error(
+      "reactiveChildContent must be called within a render context"
+    )
+  }
+
   // Boundary markers
   let start = document.createComment("")
   let end = document.createComment("/")
@@ -166,14 +235,14 @@ function reactiveChildContent(parent: Node, worker: () => any) {
 
   effect(() => {
     const cleanupFns: (() => void)[] = []
-    cleanupStack.push(cleanupFns)
+    root.cleanupStack.push(cleanupFns)
 
-    const value = worker()
+    const value = inCurrentRenderRoot(() => worker(), root)
 
     let disposes: (() => void)[] = []
 
     const fragment = document.createDocumentFragment()
-    appendChild(fragment, value, disposes)
+    appendChild(fragment, value, root)
 
     end.parentNode!.insertBefore(fragment, end)
 
@@ -188,12 +257,11 @@ function reactiveChildContent(parent: Node, worker: () => any) {
       for (const fn of cleanupFns) {
         fn()
       }
-      cleanupStack.pop()
+      root.cleanupStack.pop()
     }
   })
 }
 
-// TODO: Encapsulate component instance management
 type Disposer = () => void
 class ComponentInstance {
   progenitor: ComponentFunction
@@ -204,7 +272,17 @@ class ComponentInstance {
   protected contextMap?: Map<any, any>
   protected disposeFns?: Set<Disposer>
 
+  // Reference to the RenderRoot
+  root: RenderRoot
+
   constructor(parent: ComponentInstance | null) {
+    const root = currentRenderRoot
+    if (!root) {
+      throw new Error(
+        "ComponentInstance must be created within a render context"
+      )
+    }
+    this.root = root
     this.parent = parent
     parent?.children.push(this)
   }
@@ -245,92 +323,83 @@ class ComponentInstance {
     )
   }
 
-  static current: ComponentInstance | null = null
   static withNewChild<T>(worker: (current: ComponentInstance) => T) {
-    const prevInstance = ComponentInstance.current
+    const root = currentRenderRoot
+    if (!root) {
+      throw new Error("withNewChild must be called within a render context")
+    }
+    const prevInstance = root.currentInstance
     const newInstance = new ComponentInstance(prevInstance)
-    ComponentInstance.current = newInstance
+    root.currentInstance = newInstance
     const result = worker(newInstance)
-    ComponentInstance.current = prevInstance
+    root.currentInstance = prevInstance
     return result
   }
 }
-
-ComponentInstance.withNewChild((instance) => {
-  instance
-})
 
 export function createComponent(
   component: ComponentFunction,
   props: any,
   children: any[]
 ): { node: Node; dispose: () => void } {
-  // create a ComponentInstance object
-  const contextMap = new Map()
-  contextStack.push(contextMap)
-
-  const cleanupFns: (() => void)[] = []
-
-  const prevCleanupFns = currentCleanupFns
-  currentCleanupFns = cleanupFns
-
-  cleanupStack.push(cleanupFns)
-
-  const result = component(props, children)
-  const fragment = document.createDocumentFragment()
-
-  if (Array.isArray(result)) {
-    result.forEach((node) => {
-      appendChild(fragment, node)
-    })
-  } else {
-    appendChild(fragment, result)
+  const root = currentRenderRoot
+  if (!root) {
+    throw new Error("createComponent must be called within a render context")
   }
 
-  let isDisposed = false
-  const dispose = () => {
-    if (isDisposed) {
-      return console.warn("Component already unmounted")
+  return ComponentInstance.withNewChild((instance) => {
+    const contextMap = new Map()
+    root.contextStack.push(contextMap)
+
+    const cleanupFns: (() => void)[] = []
+
+    const prevCleanupFns = root.currentCleanupFns
+    root.currentCleanupFns = cleanupFns
+
+    root.cleanupStack.push(cleanupFns)
+
+    const result = component(props, children)
+    const fragment = document.createDocumentFragment()
+
+    if (Array.isArray(result)) {
+      result.forEach((node) => {
+        appendChild(fragment, node)
+      })
+    } else {
+      appendChild(fragment, result)
     }
 
-    for (const fn of cleanupFns) {
-      fn()
+    let isDisposed = false
+    const dispose = () => {
+      if (isDisposed) {
+        return console.warn("Component already unmounted")
+      }
+
+      for (const fn of cleanupFns) {
+        fn()
+      }
+
+      root.contextStack.pop()
+      root.cleanupStack.pop()
+      isDisposed = true
     }
 
-    contextStack.pop()
-    cleanupStack.pop()
-    isDisposed = true
-  }
+    root.currentCleanupFns = prevCleanupFns
 
-  currentCleanupFns = prevCleanupFns
+    if (root.currentCleanupFns) {
+      root.currentCleanupFns.push(dispose)
+    }
 
-  if (currentCleanupFns) {
-    currentCleanupFns.push(dispose)
-  }
-
-  return { node: fragment, dispose }
+    return { node: fragment, dispose }
+  })
 }
 
-/**
- * Renders a component into a specified container element.
- *
- * @param component - The component function to render.
- * @param container - The HTML element to render the component into.
- * @returns A function that, when called, will unmount the rendered component and clean up resources.
- *
- * @remarks
- * The function creates a component using `createComponent`, and appends it to the container
- * between two comment nodes (`pulse` and `/pulse`). The returned function can be used to
- * unmount the component, remove the comment nodes, and clean up resources.
- *
- * @example
- * ```typescript
- * const unmount = render(MyComponent, document.getElementById('app'));
- * // To unmount the component later:
- * unmount();
- * ```
- */
 export function render(component: ComponentFunction, container: HTMLElement) {
+  const root = new RenderRoot()
+
+  const prevRoot = currentRenderRoot
+  currentRenderRoot = root
+
   const { node, dispose } = createComponent(component, null, [])
   const startMarker = document.createComment("pulse")
   const endMarker = document.createComment("/pulse")
@@ -338,6 +407,8 @@ export function render(component: ComponentFunction, container: HTMLElement) {
   container.appendChild(startMarker)
   container.appendChild(node)
   container.appendChild(endMarker)
+
+  currentRenderRoot = prevRoot
 
   let isDisposed = false
   return () => {
