@@ -1,63 +1,3 @@
-// TODO: Move away from module state add new RenderContext class
-
-export class RenderContext {
-  contextStack: Map<any, any>[] = []
-  cleanupStack: (() => void)[][] = []
-  currentCleanupFns?: (() => void)[]
-
-  constructor() {
-    this.currentCleanupFns = []
-  }
-
-  static current: RenderContext | null = null
-}
-
-// class RenderContext {
-//   contextStack: Map<any, any>[]
-//   cleanupFns: (() => void)[]
-
-//   constructor() {
-//     this.contextStack = [new Map()]
-//     this.cleanupFns = []
-//   }
-
-//   pushContext() {
-//     this.contextStack.push(new Map())
-//   }
-//   popContext() {
-//     this.contextStack.pop()
-//   }
-
-//   setContext(key: any, value: any) {
-//     this.contextStack[this.contextStack.length - 1]!.set(key, value)
-//   }
-
-//   getContext<T>(key: any): T {
-//     return this.contextStack[this.contextStack.length - 1]!.get(key)
-//   }
-
-//   onMount(fn: () => void | (() => void)) {
-//     queueMicrotask(() => {
-//       const unmount = fn()
-//       if (unmount) {
-//         this.onUnmount(unmount)
-//       }
-//     })
-//   }
-
-//   onUnmount(fn: () => void) {
-//     this.cleanupFns.push(fn)
-//   }
-
-//   cleanup() {
-//     for (const fn of this.cleanupFns) {
-//       fn()
-//     }
-//   }
-
-//   static current: RenderContext | null = null
-// }
-
 import {
   effect as baseEffect,
   EffectFunction,
@@ -75,10 +15,6 @@ export function effect(fn: EffectFunction): void {
 export const contextStack: Map<any, any>[] = []
 
 export function setContext(key: any, value: any) {
-  // if (!ComponentInstance.current) {
-  //   throw new Error("setContext must be called within a component")
-  // }
-  // ComponentInstance.current.setContext(key, value)
   if (contextStack.length === 0) {
     throw new Error("setContext must be called within a component")
   }
@@ -109,6 +45,7 @@ export function onMount(fn: () => void | (() => void)) {
   })
 }
 
+/** @deprecated use a clean up function return from onMount instead */
 export function onUnmount(fn: () => void) {
   if (cleanupStack.length === 0) {
     throw new Error("onUnmount must be called within a component")
@@ -394,8 +331,6 @@ export function createComponent(
  * ```
  */
 export function render(component: ComponentFunction, container: HTMLElement) {
-  const renderContext = new RenderContext()
-  RenderContext.current = renderContext
   const { node, dispose } = createComponent(component, null, [])
   const startMarker = document.createComment("pulse")
   const endMarker = document.createComment("/pulse")
@@ -405,8 +340,6 @@ export function render(component: ComponentFunction, container: HTMLElement) {
   container.appendChild(endMarker)
 
   let isDisposed = false
-  RenderContext.current = null
-
   return () => {
     if (isDisposed) {
       return console.warn("Render root already unmounted")

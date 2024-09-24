@@ -1,5 +1,5 @@
-import { describe, expect, it, spyOn } from "bun:test"
-import { Signal, batch, computed, effect } from "./internals"
+import { describe, expect, it, spyOn, mock } from "bun:test"
+import { Signal, batch, computed, effect, event } from "./internals"
 
 describe("Signals Module", () => {
   describe("Signal", () => {
@@ -727,5 +727,76 @@ describe("Signal Subscribe Method", () => {
 
     signal.value = 10
     expect(subscriberValue).toBe(5) // Should not have updated
+  })
+})
+
+describe("event", () => {
+  it("should allow subscribers to receive events", () => {
+    const myEvent = event<string>()
+    const callback = mock()
+
+    const unsubscribe = myEvent(callback)
+    myEvent.send("test event")
+
+    expect(callback).toHaveBeenCalledWith("test event")
+    unsubscribe()
+  })
+
+  it("should allow multiple subscribers to receive events", () => {
+    const myEvent = event<string>()
+    const callback1 = mock()
+    const callback2 = mock()
+
+    const unsubscribe1 = myEvent(callback1)
+    const unsubscribe2 = myEvent(callback2)
+    myEvent.send("test event")
+
+    expect(callback1).toHaveBeenCalledWith("test event")
+    expect(callback2).toHaveBeenCalledWith("test event")
+    unsubscribe1()
+    unsubscribe2()
+  })
+
+  it("should not call unsubscribed callbacks", () => {
+    const myEvent = event<string>()
+    const callback = mock()
+
+    const unsubscribe = myEvent(callback)
+    unsubscribe()
+    myEvent.send("test event")
+
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it("should clear all subscribers", () => {
+    const myEvent = event<string>()
+    const callback1 = mock()
+    const callback2 = mock()
+
+    myEvent(callback1)
+    myEvent(callback2)
+    myEvent.clear()
+    myEvent.send("test event")
+
+    expect(callback1).not.toHaveBeenCalled()
+    expect(callback2).not.toHaveBeenCalled()
+  })
+
+  it("should handle errors in subscriber callbacks gracefully", () => {
+    const myEvent = event<string>()
+    const errorCallback = mock(() => {
+      throw new Error("Test error")
+    })
+    const callback = mock()
+
+    myEvent(errorCallback)
+    myEvent(callback)
+    myEvent.send("test event")
+
+    expect(callback).toHaveBeenCalledWith("test event")
+    expect(errorCallback).toHaveBeenCalledWith("test event")
+    expect(errorCallback).toThrowError("Test error")
+
+    myEvent.clear()
   })
 })

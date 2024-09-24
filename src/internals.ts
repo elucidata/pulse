@@ -10,7 +10,7 @@ export interface ReadonlySignal<T> {
 
 export class Signal<T> implements ReadonlySignal<T> {
   private _value: T
-  private _subscribers?: Set<(value: T) => void>
+  private _subscriptions = event<T>()
   dependents: Set<Computation> = new Set()
 
   constructor(value: T) {
@@ -30,7 +30,7 @@ export class Signal<T> implements ReadonlySignal<T> {
       this._value = newValue
       const dependents = Array.from(this.dependents)
       dependents.forEach((dep) => dep.invalidate())
-      this._subscribers?.forEach((subscriber) => subscriber(newValue))
+      this._subscriptions.send(newValue)
     }
   }
 
@@ -50,14 +50,7 @@ export class Signal<T> implements ReadonlySignal<T> {
   // Add the subscribe method to conform to Svelte's store interface
   subscribe(run: (value: T) => void): () => void {
     run(this._value)
-    if (!this._subscribers) {
-      this._subscribers = new Set()
-    }
-    this._subscribers.add(run)
-
-    return () => {
-      this._subscribers!.delete(run)
-    }
+    return this._subscriptions(run)
   }
 }
 
@@ -232,10 +225,6 @@ export function batch(fn: () => void) {
   }
 }
 
-export function isObservable(value: any): boolean {
-  return typeof signal === "object" && signal !== null && "get" in signal
-}
-
 export function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
   return (
     typeof signal === "object" &&
@@ -244,4 +233,38 @@ export function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
     "peek" in signal &&
     "subscribe" in signal
   )
+}
+
+type EventCallback<T> = (detail: T) => void
+
+export interface SparkEvent<T> {
+  (callback: EventCallback<T>): () => void
+  send(detail: T): void
+  clear(): void
+}
+
+export function event<T>(): SparkEvent<T> {
+  let targets: Set<EventCallback<T>> | null = null
+
+  function subscribe(callback: EventCallback<T>): () => void {
+    if (!targets) {
+      targets = new Set<EventCallback<T>>()
+    }
+    targets.add(callback)
+    return () => targets?.delete(callback)
+  }
+  function send(detail: T): void {
+    targets?.forEach((callback) => {
+      try {
+        callback(detail)
+      } catch (error) {
+        console.error("Error in event callback", error)
+      }
+    })
+  }
+  function clear(): void {
+    targets?.clear()
+    targets = null
+  }
+  return Object.assign(subscribe, { send, clear })
 }
