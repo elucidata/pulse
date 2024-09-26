@@ -7,4 +7,5 @@ export {
   signal,
   isReadonlySignal,
   ReadonlySignal,
+  withId,
 } from "./internals"

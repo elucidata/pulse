@@ -24,6 +24,9 @@ export const PulseComponent = React.memo(function PulseComponent<
         return console.log("[PulseComponent] ref: div is null")
       }
       divRef.current = div
+      if (disposeRef.current) {
+        return console.warn("[PulseComponent] already mounted")
+      }
       disposeRef.current = render(component, div)
       console.log("[PulseComponent] mounted", typeof disposeRef.current)
     },

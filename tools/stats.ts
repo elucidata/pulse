@@ -16,4 +16,5 @@ reportSizes({
   Utils: $`gzip -c9 dist/utils/*.js | wc -c | numfmt --to=si`.quiet(),
   React: $`gzip -c9 dist/react/*.js | wc -c | numfmt --to=si`.quiet(),
   View: $`gzip -c9 dist/view/*.js | wc -c | numfmt --to=si`.quiet(),
+  ViewTNG: $`gzip -c9 dist/view/tng/*.js | wc -c | numfmt --to=si`.quiet(),
 })

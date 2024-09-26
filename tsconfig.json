@@ -37,7 +37,9 @@
     "src/index.ts",
     "src/utils/*.ts",
     "src/react/*.ts",
-    "src/view/*.ts"
+    "src/view/*.ts",
+    "src/view/tng/index.ts",
+    "src/view/tng/index.test.ts"
   ],
   "exclude": ["./node_modules/**/*", "temp/*", "./*.test.ts", "./**/*.test.ts"]
 }

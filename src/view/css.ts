@@ -99,7 +99,7 @@ function crcHash(str: string): number {
   return hash
 }
 
-function applyStyles(className: string, styles: string): void {
+export function applyStyles(className: string, styles: string): void {
   if (styleCache.has(className)) {
     return console.debug("Styles already applied", className)
   }
@@ -107,7 +107,7 @@ function applyStyles(className: string, styles: string): void {
   applyStylesToDOM(styles)
 }
 
-function applyStylesToDOM(styles: string): boolean {
+export function applyStylesToDOM(styles: string): boolean {
   const target = getStyleParent()
   if (!target || !document) {
     return false

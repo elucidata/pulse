@@ -142,3 +142,62 @@ class View {
 }
 
 ```
+
+## View Stacks?
+
+Example usage:
+
+```ts
+import { view, tags, designer, slot, list, css, signal, effect, hasChildren } from '@elucidata/pulse/view`
+
+const { A, Div, Section, Main, Header, H1, Button. Aside } = tags
+
+const Page = view(() => {
+
+  const counter = signal(0)
+  const increment = () => signal.value++
+
+  Header(() => {
+    H1("Hello There")
+  })
+
+  Section((class:'counter') => {
+    P(() => {
+      text("Counter: ")
+      live(signal)
+    })
+    Button({ onclick: increment }, () => "Increment")
+  })
+
+  QuipPanel({ username:'matt' })
+
+})
+.styles(/*css*/`
+  color: dimgrey;
+  font-family: var(--stack-modern);
+
+  .counter {
+    background: silver;
+    border-radius: 1rem;
+    padding: 1rem;
+  }
+`)
+
+const QuipPanel = view((props, children) => {
+  Aside(() => {
+    Header(() => {
+
+    })
+  })
+  when(() => hasChildren(children), () => {
+    Message(() => slot(children))
+  }) 
+})
+
+const Message = Div.design.css`
+  padding: 1rem;
+  background: dodgerblue;
+  color: white;
+`
+
+```

@@ -17,6 +17,58 @@ describe("Signals Module", () => {
 
       expect(computedValue).toBe(10)
     })
+
+    it("should notify dependents on value change with multiple dependents", () => {
+      const signal = new Signal(1)
+      let computedValue1 = 0
+      let computedValue2 = 0
+
+      effect(() => {
+        computedValue1 = signal.value * 2
+      })
+
+      effect(() => {
+        computedValue2 = signal.value * 3
+      })
+
+      expect(computedValue1).toBe(2)
+      expect(computedValue2).toBe(3)
+
+      signal.value = 5
+
+      expect(computedValue1).toBe(10)
+      expect(computedValue2).toBe(15)
+    })
+
+    it("should allow updating values", () => {
+      const signal = new Signal(1)
+      let observedValue = 0
+
+      effect(() => {
+        observedValue = signal.value
+      })
+
+      expect(observedValue).toBe(1)
+
+      signal.update((value) => value + 1)
+
+      expect(observedValue).toBe(2)
+    })
+
+    it("should allow updating array values", () => {
+      const signal = new Signal(["a", "b"])
+      let observedValue = []
+
+      effect(() => {
+        observedValue = signal.value
+      })
+
+      expect(observedValue).toEqual(["a", "b"])
+
+      signal.update((value) => value.filter((v) => v !== "a"))
+
+      expect(observedValue).toEqual(["b"])
+    })
   })
 
   describe("Effect", () => {

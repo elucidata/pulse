@@ -44,7 +44,8 @@ export class Signal<T> implements ReadonlySignal<T> {
     this.value = newValue
   }
   update(updater: (value: T) => T) {
-    this.set(updater(this._value))
+    const newValue = updater(this._value)
+    this.set(newValue)
   }
 
   // Add the subscribe method to conform to Svelte's store interface
@@ -54,10 +55,22 @@ export class Signal<T> implements ReadonlySignal<T> {
   }
 }
 
+let overrideId: string | null = null
+
+export function withId<T>(id: string, worker: () => T) {
+  const prevId = overrideId
+  overrideId = id
+  try {
+    return worker()
+  } finally {
+    overrideId = prevId
+  }
+}
+
 export class Computation {
   protected static lastId = 0
 
-  readonly id = (Computation.lastId++).toString(36)
+  readonly id = overrideId || (Computation.lastId++).toString(36)
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
   private _isRunning: boolean = false
@@ -126,6 +139,8 @@ export class Computation {
       child.cleanup()
     })
     // this.childComputations.clear()
+
+    // console.debug("Cleaning up", this.id, "deps.size:", this.dependencies.size)
 
     if (this._fnCleanup) {
       try {

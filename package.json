@@ -1,6 +1,6 @@
 {
   "name": "@elucidata/pulse",
-  "version": "2.0.0",
+  "version": "2.0.4",
   "description": "Microscopic signals with automatic dependency tracking.",
   "module": "dist/index.js",
   "type": "module",
@@ -22,6 +22,9 @@
     },
     "./view/html": {
       "import": "./dist/view/html.js"
+    },
+    "./view/tng": {
+      "import": "./dist/view/tng/index.js"
     }
   },
   "repository": {
@@ -39,6 +42,7 @@
     "test": "bun test"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^15.7.4",
     "@types/bun": "^1.1.6",
     "tsup": "^8.2.4",
     "@types/react": "^18.3.5",
@@ -48,8 +52,5 @@
     "preact": "^10.23.1",
     "react": "^18.3.1",
     "htm": "^3.1.1"
-  },
-  "dependencies": {
-    "@happy-dom/global-registrator": "^15.7.4"
   }
 }
