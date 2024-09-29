@@ -2,9 +2,9 @@ import { ReadonlySignal, signal } from "../internals"
 
 // Hot and Lazy Sync Observables with map and filter, masquerading as a ReadonlySignal
 export interface Observable<T> extends ReadonlySignal<T> {
-  subscribe(run: (value: T) => void): () => void
-  map<U>(mapFn: (value: T) => U): Observable<U>
-  filter(predicate: (value: T) => boolean): Observable<T>
+    subscribe(run: (value: T) => void): () => void
+    map<U>(mapFn: (value: T) => U): Observable<U>
+    filter(predicate: (value: T) => boolean): Observable<T>
 }
 
 /**
@@ -23,59 +23,59 @@ export interface Observable<T> extends ReadonlySignal<T> {
  *  and convert to a signal.
  */
 export function observable<T>(
-  setup: (emit: (value: T) => void) => () => void
+    setup: (emit: (value: T) => void) => () => void
 ): Observable<T> {
-  let subscribers = 0
-  let teardown: (() => void) | null = null
-  const s = signal<T>(undefined as any)
+    let subscribers = 0
+    let teardown: (() => void) | null = null
+    const s = signal<T>(undefined as any)
 
-  return {
-    get value() {
-      return s.value
-    },
-    peek() {
-      return s.peek()
-    },
-    get() {
-      return s.get()
-    },
-    map<U>(mapFn: (value: T) => U): Observable<U> {
-      return map(this, mapFn)
-    },
-    filter(predicate: (value: T) => boolean): Observable<T> {
-      return filter(this, predicate)
-    },
-    subscribe(run) {
-      subscribers++
-      if (subscribers === 1) {
-        try {
-          teardown = setup((value) => {
-            s.set(value)
-          })
-        } catch (e) {
-          console.error("Error in observable setup", e)
-        }
-      }
+    return {
+        get value() {
+            return s.value
+        },
+        peek() {
+            return s.peek()
+        },
+        get() {
+            return s.get()
+        },
+        map<U>(mapFn: (value: T) => U): Observable<U> {
+            return map(this, mapFn)
+        },
+        filter(predicate: (value: T) => boolean): Observable<T> {
+            return filter(this, predicate)
+        },
+        subscribe(run) {
+            subscribers++
+            if (subscribers === 1) {
+                try {
+                    teardown = setup((value) => {
+                        s.set(value)
+                    })
+                } catch (e) {
+                    console.error("Error in observable setup", e)
+                }
+            }
 
-      const unsubscribe = s.subscribe((value) => {
-        if (value !== undefined) run(value)
-      })
+            const unsubscribe = s.subscribe((value) => {
+                if (value !== undefined) run(value)
+            })
 
-      return () => {
-        unsubscribe()
-        subscribers--
-        if (subscribers === 0 && teardown) {
-          try {
-            teardown()
-          } catch (e) {
-            console.error("Error in observable teardown", e)
-          }
-          teardown = null
-          s.set(undefined as any)
-        }
-      }
-    },
-  }
+            return () => {
+                unsubscribe()
+                subscribers--
+                if (subscribers === 0 && teardown) {
+                    try {
+                        teardown()
+                    } catch (e) {
+                        console.error("Error in observable teardown", e)
+                    }
+                    teardown = null
+                    s.set(undefined as any)
+                }
+            }
+        },
+    }
 }
 
 /**
@@ -88,39 +88,39 @@ export function observable<T>(
  *  of the specified type.
  */
 export function fromDomEvent<K extends keyof HTMLElementEventMap>(
-  element: HTMLElement,
-  eventName: K
+    element: HTMLElement,
+    eventName: K
 ): Observable<HTMLElementEventMap[K]> {
-  return observable<HTMLElementEventMap[K]>((emit) => {
-    const handler = (event: HTMLElementEventMap[K]) => emit(event)
-    element.addEventListener(eventName, handler)
+    return observable<HTMLElementEventMap[K]>((emit) => {
+        const handler = (event: HTMLElementEventMap[K]) => emit(event)
+        element.addEventListener(eventName, handler)
 
-    return () => {
-      element.removeEventListener(eventName, handler)
-    }
-  })
+        return () => {
+            element.removeEventListener(eventName, handler)
+        }
+    })
 }
 
 export function map<T, U>(
-  source: Observable<T>,
-  mapFn: (value: T) => U
+    source: Observable<T>,
+    mapFn: (value: T) => U
 ): Observable<U> {
-  return observable<U>((emit) => {
-    const teardown = source.subscribe((value) => {
-      emit(mapFn(value))
+    return observable<U>((emit) => {
+        const teardown = source.subscribe((value) => {
+            emit(mapFn(value))
+        })
+        return teardown
     })
-    return teardown
-  })
 }
 
 export function filter<T>(
-  source: Observable<T>,
-  predicate: (value: T) => boolean
+    source: Observable<T>,
+    predicate: (value: T) => boolean
 ): Observable<T> {
-  return observable<T>((emit) => {
-    const teardown = source.subscribe((value) => {
-      if (predicate(value)) emit(value)
+    return observable<T>((emit) => {
+        const teardown = source.subscribe((value) => {
+            if (predicate(value)) emit(value)
+        })
+        return teardown
     })
-    return teardown
-  })
 }

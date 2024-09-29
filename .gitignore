@@ -40,3 +40,6 @@ temp/
 
 # Build files
 dist/
+
+# Local AI influences
+dev-notes.md

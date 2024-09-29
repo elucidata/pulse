@@ -4,5 +4,4 @@
 
 ## Internals
 - Synchronous updates.
-  - Exceptions are explicitly named as such. `*Async`
 

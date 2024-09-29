@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
-import { signal } from "../../internals"
+import { signal } from "../internals"
 import {
-    Component,
+    View,
     activeRoots,
     getEnv,
     live,
@@ -30,7 +30,7 @@ describe("View TNG", () => {
         document.body.innerHTML = ""
     })
 
-    it("Should allow component definition", () => {
+    it("Should allow view definition", () => {
         const Test = view(() => {})
 
         expect(Test).toBeDefined()
@@ -46,7 +46,7 @@ describe("View TNG", () => {
 
         const output = Test()
         expect(output).toBeDefined()
-        expect(output).toBeInstanceOf(Component)
+        expect(output).toBeInstanceOf(View)
         expect(output.dom).toBeDefined()
         expect(output.dom.childNodes.length).toEqual(1)
         expect(getHTML(output.dom)).toEqual("<div>Hello World</div>")
@@ -159,7 +159,7 @@ describe("View TNG", () => {
             tags.span({}, () => "Child")
         })
 
-        expect(output).toBeInstanceOf(Component)
+        expect(output).toBeInstanceOf(View)
         expect(getHTML(output.dom)).toEqual(
             "<div>Parent: <span>Child</span></div>"
         )
@@ -174,7 +174,7 @@ describe("View TNG", () => {
 
         const output = MyComponent({ name: "John" })
 
-        expect(output).toBeInstanceOf(Component)
+        expect(output).toBeInstanceOf(View)
         expect(getHTML(output.dom)).toEqual("<div>John</div>")
     })
 
