@@ -269,7 +269,7 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toEqual("")
     })
 
-    it("Should support conditional fallback", () => {
+    it("Should support conditional fallback in `when` else block", () => {
         const display = signal(false)
 
         const MyComponent = view(() => {
@@ -296,6 +296,61 @@ describe("View TNG", () => {
 
         display.set(false)
         expect(document.body.innerHTML).toContain("CRICKETS")
+    })
+
+    it("Should support onDispose callbacks with `when` blocks", () => {
+        const display = signal(true)
+        let trail: string[] = []
+
+        const MyComponent = view(() => {
+            tags.div({}, () => {
+                when(
+                    display,
+                    () => {
+                        onDispose(() => {
+                            trail.push("then")
+                        })
+                        tags.div({}, () => "Then")
+                    },
+                    () => {
+                        onDispose(() => {
+                            trail.push("else")
+                        })
+                        tags.div("Else")
+                    }
+                )
+            })
+        })
+
+        expect(MyComponent).toBeDefined()
+
+        const dispose = render(MyComponent(), document.body)
+        expect(document.body.innerHTML).toContain("Then")
+        expect(trail).toEqual([])
+
+        display.set(false)
+        expect(document.body.innerHTML).toContain("Else")
+        expect(trail).toEqual(["then"])
+
+        display.set(true)
+        expect(document.body.innerHTML).toContain("Then")
+        expect(trail).toEqual(["then", "else"])
+
+        display.set(false)
+        expect(document.body.innerHTML).toContain("Else")
+        expect(trail).toEqual(["then", "else", "then"])
+
+        display.set(true)
+        expect(document.body.innerHTML).toContain("Then")
+        expect(trail).toEqual(["then", "else", "then", "else"])
+
+        display.set(false)
+        expect(document.body.innerHTML).toContain("Else")
+        expect(trail).toEqual(["then", "else", "then", "else", "then"])
+
+        dispose()
+        expect(document.body.innerHTML).toEqual("")
+        expect(trail).toEqual(["then", "else", "then", "else", "then", "else"])
     })
 
     it("Should be resilent to errors within `when` blocks", () => {

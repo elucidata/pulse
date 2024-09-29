@@ -113,11 +113,6 @@ export class Component<P> {
                 console.warn("onDispose() called outside of component")
                 return
             }
-            // if (!!Component.activeView && Component.activeView !== this.dom) {
-            //     console.warn(
-            //         "onDispose() called outside of component view, this might cause unexpected behavior."
-            //     )
-            // }
             if (!this.disposeCallbacks) {
                 this.disposeCallbacks = new Set()
             }
@@ -126,18 +121,13 @@ export class Component<P> {
     }
 
     dispose() {
-        // First, dispose of all child components
+        // Child-first disposal
         this.children.forEach((child) => child.dispose())
-        // console.assert(this.children.size === 0, "Children not disposed")
-        this.children.clear() // Ensure the children set is cleared
-
-        // Then, execute the component's own dispose callbacks
+        this.children.clear()
         if (this.disposeCallbacks) {
             this.disposeCallbacks.forEach((callback) => callback())
             this.disposeCallbacks.clear()
         }
-
-        // Remove this component from its parent's children set
         if (this.parent) {
             this.parent.children.delete(this)
         }
@@ -157,7 +147,6 @@ export class Component<P> {
         if (Component.activeView) {
             Component.activeView.appendChild(child)
         } else {
-            // console.warn("No active view, trying component fragment")
             Component.appendToActiveComponent(child)
         }
     }
@@ -206,36 +195,24 @@ export function view<P>(builder: DomBuilder<P>): ComponentFactory<P> {
     )
 }
 
-/**
- * If the value is a Signal, creates an effect to update the attribute
- * when the signal changes. Otherwise, sets the attribute directly.
- */
 function setElAttr(el: Element, key: string, value: any) {
     if (isReadonlySignal(value)) {
         const disposeLiveAttr = effect(() => {
-            // console.debug("🐞 Setting LIVE attribute", key, value.peek())
             el.setAttribute(key, String(value.value))
         })
-        // console.debug("🐞 (Tracking effect dispose function)")
         Component.active?.hooks.onDispose(disposeLiveAttr)
     } else {
-        // console.debug("🐞 Setting STATIC attribute", key, value)
         el.setAttribute(key, String(value))
     }
 }
 function setElProp(el: Element, key: string, value: any) {
     if (isReadonlySignal(value)) {
         const disposeLiveAttr = effect(() => {
-            // console.debug("🐞 Setting LIVE prop", key, value.peek())
             ;(el as any)[key] = value.value
-            // el.setAttribute(key, String(value.value))
         })
-        // console.debug("🐞 (Tracking effect dispose function)")
         Component.active?.hooks.onDispose(disposeLiveAttr)
     } else {
-        // console.debug("🐞 Setting STATIC prop", key, value)
         ;(el as any)[key] = value
-        // el.setAttribute(key, String(value))
     }
 }
 
@@ -263,38 +240,28 @@ function elem(
     for (const key in props) {
         if (key === "class" || key === "className") {
             setElProp(el, "className", props[key])
-            // setElAttr(el, "className", props[key])
-            // el.className = props[key]
         } else if (key.startsWith("on")) {
             el.addEventListener(key.slice(2).toLowerCase(), props[key])
         } else if (key === "style") {
             el.style.cssText = props[key]
         } else if (key === "html") {
             setElProp(el, "innerHTML", props[key])
-            // setElAttr(el, "innerHTML", props[key])
-            // el.innerHTML = props[key]
         } else if (key === "for") {
             setElProp(el, "htmlFor", props[key])
-            // setElAttr(el, "htmlFor", props[key])
-            // ;(el as HTMLLabelElement).htmlFor = props[key]
         } else if (key === "ref") {
             // Should this happen now, or after the element is added to the DOM?
             queueMicrotask(() => props[key](el))
-            // props[key](el)
         } else if (key === "key") {
             // probably not needed?
             setElAttr(el, "data-key", props[key])
-            // el.setAttribute("data-key", props[key])
         } else if (key === "data") {
             for (const dataKey in props[key]) {
                 el.dataset[dataKey] = props[key][dataKey]
             }
         } else if (key === "use") {
             queueMicrotask(() => props[key](el))
-            // props[key](el)
         } else {
             setElAttr(el, key, props[key])
-            // el.setAttribute(key, props[key])
         }
     }
 
@@ -338,8 +305,6 @@ export function when(
     // Create comment markers to denote the conditional block
     const startMarker = document.createComment(`when:${id}`)
     const endMarker = document.createComment(`/when:${id}`)
-
-    // Insert markers into the DOM
     if (activeView) {
         activeView.appendChild(startMarker)
         activeView.appendChild(endMarker)
@@ -354,6 +319,24 @@ export function when(
     // Create a container to hold the conditionally rendered content
     let container: DocumentFragment | null = null
     let hasError = false
+    let boundary: Component<any>
+
+    const withinBoundary = <T>(
+        container: DocumentFragment | null,
+        fn: () => T
+    ) => {
+        if (!!boundary) boundary.dispose()
+        const prevComponent = Component.active
+        const prevView = Component.activeView
+        Component.active = activeComponent
+        Component.activeView = container //activeView
+        boundary = Component.create(() => {}, [])
+        Component.active = boundary
+        const result = fn()
+        Component.active = prevComponent
+        Component.activeView = prevView
+        return result
+    }
 
     effect(
         () => {
@@ -395,11 +378,13 @@ export function when(
                 Component.active = null // or set to an appropriate value if needed
 
                 untracked(() => {
-                    if (runThenBuilder) {
-                        thenBuilder()
-                    } else if (elseBuilder) {
-                        elseBuilder()
-                    }
+                    withinBoundary(container, () => {
+                        if (runThenBuilder) {
+                            thenBuilder()
+                        } else if (elseBuilder) {
+                            elseBuilder()
+                        }
+                    })
                 })
 
                 insertBetweenMarkers(container, startMarker, endMarker)
