@@ -30,7 +30,7 @@ describe("View TNG", () => {
         document.body.innerHTML = ""
     })
 
-    it("Should all component definition", () => {
+    it("Should allow component definition", () => {
         const Test = view(() => {})
 
         expect(Test).toBeDefined()
@@ -57,6 +57,73 @@ describe("View TNG", () => {
         remove()
         expect(document.body.innerHTML).toEqual("")
         expect(activeRoots.size).toEqual(0)
+    })
+
+    it("Should render HTML elements with attributes", () => {
+        const Test = view(() => {
+            tags.div({ id: "test", class: "example" }, () => "Hello World")
+        })
+
+        expect(Test).toBeDefined()
+
+        const output = Test()
+        expect(output).toBeDefined()
+        expect(getHTML(output.dom)).toEqual(
+            '<div id="test" class="example">Hello World</div>'
+        )
+
+        const remove = render(Test(), document.body)
+        expect(document.body.innerHTML).toContain("Hello World")
+        remove()
+        expect(document.body.innerHTML).toEqual("")
+    })
+
+    it("Should render HTML elements with dynamic attributes", () => {
+        const id = signal("test")
+        const Test = view(() => {
+            const className = signal("example")
+
+            tags.div({ id, class: className }, () => "Hello World")
+        })
+
+        expect(Test).toBeDefined()
+
+        const output = Test()
+        expect(output).toBeDefined()
+        expect(getHTML(output.dom)).toEqual(
+            '<div id="test" class="example">Hello World</div>'
+        )
+
+        const remove = render(Test(), document.body)
+        expect(document.body.innerHTML).toContain("Hello World")
+        expect(document.body.innerHTML).toContain('id="test"')
+        id.set("new-id")
+        expect(document.body.innerHTML).toContain('id="new-id"')
+
+        remove()
+        expect(document.body.innerHTML).toEqual("")
+    })
+
+    it("Should allow multiple call styles", () => {
+        const div = tags.div
+
+        const Test = view(() => {
+            div("One")
+            div(() => "Two")
+            div({}, () => "Three")
+            div({ class: "done" }, () => "Four")
+            div(() => text("Five"))
+            div(text("Six")) // This will not nest the text node
+        })
+
+        expect(Test).toBeDefined()
+
+        const output = Test()
+        expect(output).toBeDefined()
+        expect(getHTML(output.dom)).toEqual(
+            '<div>One</div><div>Two</div><div>Three</div><div class="done">Four</div><div>Five</div>Six<div></div>'
+        )
+        console.log(getHTML(output.dom))
     })
 
     it("Should render nested HTML elements", () => {
@@ -167,7 +234,7 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toContain("Hello World")
     })
 
-    it.only("Should support conditional rendering with `when` block", () => {
+    it("Should support conditional rendering with `when` block", () => {
         const display = signal(false)
 
         const MyComponent = view(() => {
@@ -202,7 +269,7 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toEqual("")
     })
 
-    it.only("Should support conditional fallback", () => {
+    it("Should support conditional fallback", () => {
         const display = signal(false)
 
         const MyComponent = view(() => {
@@ -231,7 +298,7 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toContain("CRICKETS")
     })
 
-    it.only("Should be resilent to errors within `when` blocks", () => {
+    it("Should be resilent to errors within `when` blocks", () => {
         const display = signal(false)
         const MyComponent = view(() => {
             tags.div(() => {
@@ -263,7 +330,7 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toEqual("")
     })
 
-    it.only("Should be resilent to errors within `when` else blocks", () => {
+    it("Should be resilent to errors within `when` else blocks", () => {
         const display = signal(true)
         const MyComponent = view(() => {
             tags.div(() => {
@@ -298,7 +365,7 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toEqual("")
     })
 
-    it.only("Should support conditional rendering with `live` block", () => {
+    it("Should support conditional rendering with `live` block", () => {
         const display = signal(true)
 
         const MyComponent = view(() => {
@@ -326,9 +393,12 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toContain("Goodbye")
     })
 
-    it.skip("Should support dispose of components within `live` blocks", () => {
+    it("Should support dispose of components within `live` blocks", () => {
         const display = signal(true)
         const { div } = tags
+
+        let disposeCount = 0
+        let trail: string[] = []
 
         const Yep = view(() => {
             div("Yep")
@@ -338,7 +408,17 @@ describe("View TNG", () => {
         })
 
         const MyComponent = view(() => {
+            onDispose(() => {
+                trail.push("view")
+                disposeCount++
+            })
+
             live(() => {
+                onDispose(() => {
+                    trail.push("live")
+                    disposeCount++
+                })
+
                 if (display.value) {
                     Yep()
                 } else {
@@ -349,17 +429,34 @@ describe("View TNG", () => {
 
         expect(MyComponent).toBeDefined()
 
-        render(MyComponent(), document.body)
+        const dispose = render(MyComponent(), document.body)
+
+        expect(trail).toEqual([])
+        expect(disposeCount).toEqual(0)
         expect(document.body.innerHTML).toContain("Yep")
         expect(document.body.innerHTML).not.toContain("Nope")
 
         display.set(false)
+        expect(trail).toEqual(["live"])
+        expect(disposeCount).toEqual(1)
         expect(document.body.innerHTML).not.toContain("Yep")
         expect(document.body.innerHTML).toContain("Nope")
 
-        display.set(false)
+        display.set(false) // Should not run live block again if value is the same
+        expect(trail).toEqual(["live"])
+        expect(disposeCount).toEqual(1)
         expect(document.body.innerHTML).not.toContain("Yep")
         expect(document.body.innerHTML).toContain("Nope")
+
+        display.set(true)
+        expect(trail).toEqual(["live", "live"])
+        expect(disposeCount).toEqual(2)
+        expect(document.body.innerHTML).toContain("Yep")
+        expect(document.body.innerHTML).not.toContain("Nope")
+
+        dispose()
+        expect(trail).toEqual(["live", "live", "live", "view"])
+        expect(disposeCount).toEqual(4)
     })
 
     it("Should support onDispose hooks for components", () => {
@@ -408,51 +505,4 @@ describe("View TNG", () => {
         expect(document.body.innerHTML).toContain("test")
         remove()
     })
-
-    // it.skip("Should support complex conditional rendering", () => {
-    //   const display = signal("loading" as "loading" | "error" | "success")
-    //   const MyComponent = view(() => {
-    //     tags.div({}, () => {
-    //       select(() => {
-    //         switch (display.value) {
-    //           case "loading":
-    //             tags.div({}, () => "Loading...")
-    //             break
-    //           case "error":
-    //             tags.div({}, () => "Error")
-    //             break
-    //           case "success":
-    //             tags.div({}, () => "Hello")
-    //             break
-    //         }
-    //       })
-
-    //       select(
-    //         () => display,
-    //         () => ({
-    //           loading() {
-    //             tags.div({}, () => "Loading...")
-    //           },
-    //           error() {
-    //             tags.div({}, () => "Error")
-    //           },
-    //           success() {
-    //             tags.div({}, () => "Hello")
-    //           },
-    //         })
-    //       )
-    //     })
-    //   })
-
-    //   expect(MyComponent).toBeDefined()
-
-    //   render(MyComponent(), document.body)
-    //   expect(document.body.innerHTML).not.toContain("Hello")
-
-    //   display.set("success")
-    //   expect(document.body.innerHTML).toContain("Hello")
-
-    //   display.set("error")
-    //   expect(document.body.innerHTML).not.toContain("Hello")
-    // })
 })

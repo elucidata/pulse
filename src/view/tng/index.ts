@@ -113,11 +113,11 @@ export class Component<P> {
                 console.warn("onDispose() called outside of component")
                 return
             }
-            if (!!Component.activeView && Component.activeView !== this.dom) {
-                console.warn(
-                    "onDispose() called outside of component view, this might cause unexpected behavior."
-                )
-            }
+            // if (!!Component.activeView && Component.activeView !== this.dom) {
+            //     console.warn(
+            //         "onDispose() called outside of component view, this might cause unexpected behavior."
+            //     )
+            // }
             if (!this.disposeCallbacks) {
                 this.disposeCallbacks = new Set()
             }
@@ -126,13 +126,21 @@ export class Component<P> {
     }
 
     dispose() {
+        // First, dispose of all child components
+        this.children.forEach((child) => child.dispose())
+        // console.assert(this.children.size === 0, "Children not disposed")
+        this.children.clear() // Ensure the children set is cleared
+
+        // Then, execute the component's own dispose callbacks
         if (this.disposeCallbacks) {
             this.disposeCallbacks.forEach((callback) => callback())
             this.disposeCallbacks.clear()
         }
-        this.children.forEach((child) => child.dispose())
-        if (this.parent) this.parent.children.delete(this)
-        console.assert(this.children.size === 0, "Children not disposed")
+
+        // Remove this component from its parent's children set
+        if (this.parent) {
+            this.parent.children.delete(this)
+        }
     }
 
     static active: Component<any> | null = null
@@ -443,6 +451,7 @@ export function live(builder: () => void) {
     // Create a container to hold the conditionally rendered content
     let container: DocumentFragment | null = null
     let hasError = false
+    let boundary = new Component(() => {}, [])
 
     effect(() => {
         if (hasError) {
@@ -463,6 +472,17 @@ export function live(builder: () => void) {
             }
         }
 
+        if (!!boundary) {
+            boundary.dispose()
+            const prevComponent = Component.active
+            const prevView = Component.activeView
+            Component.active = activeComponent
+            Component.activeView = activeView
+            boundary = new Component(() => {}, [])
+            Component.active = prevComponent
+            Component.activeView = prevView
+        }
+
         container = document.createDocumentFragment()
 
         try {
@@ -470,6 +490,7 @@ export function live(builder: () => void) {
             const prevView = Component.activeView
             Component.activeView = container
             // Component.active = null
+            Component.active = boundary
 
             builder()
 
