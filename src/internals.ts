@@ -1,6 +1,12 @@
 export type EffectFunction = () => void | (() => void)
 export type EffectErrorFunction = (error: any, source?: Computation) => void
 
+export let config = {
+    verbose: false,
+}
+
+export const setVerbose = (value: boolean) => (config.verbose = value)
+
 export interface ReadonlySignal<T> {
     readonly value: T
     get(): T
@@ -116,7 +122,8 @@ export class Computation {
                     exceptionHandled =
                         this.errorFn !== Computation.globalErrorHandler
                 } catch (error) {
-                    console.error("Error in error handler", error)
+                    config.verbose &&
+                        console.error("Error in error handler", error)
                 }
             }
             if (!exceptionHandled) {
@@ -160,7 +167,7 @@ export class Computation {
             } catch (error) {
                 // if (typeof error === "object")
                 //   Object.assign(error, { computation: this }) // if logged, it'd be a memory leak
-                console.error("Cleanup Error:", error)
+                config.verbose && console.error("Cleanup Error:", error)
             }
         }
         this.dependencies.forEach((dep) => dep.dependents.delete(this))
@@ -176,7 +183,7 @@ export class Computation {
         error: any,
         source?: Computation
     ) => {
-        console.error("Unhandled Computation Error:", error)
+        config.verbose && console.error("Unhandled Computation Error:", error)
     }
     static setGlobalErrorHandler(handler: (error: any) => void) {
         Computation.globalErrorHandler = handler
@@ -238,7 +245,7 @@ export function untracked(fn: () => void) {
     try {
         fn()
     } catch (error) {
-        console.error("Error in untracked", error)
+        config.verbose && console.error("Error in untracked", error)
         throw error
     } finally {
         Computation.current = prevComputation
@@ -300,7 +307,8 @@ export function event<T>(): SparkEvent<T> {
             try {
                 callback(detail)
             } catch (error) {
-                console.error("Error in event callback", error)
+                config.verbose &&
+                    console.error("Error in event callback", error)
             }
         })
     }

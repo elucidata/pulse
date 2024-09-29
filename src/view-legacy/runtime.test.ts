@@ -26,13 +26,7 @@ const expectEmptyishStacks = (logNonEmpty = false) => {
     // expect(cleanupStack.length).toBe(0)
 }
 
-describe.todo("UPDATE ALL 'View' TESTS POST-REFACTOR", () => {
-    it("sooner would be better", () => {
-        expect(true).toBe(true)
-    })
-})
-
-describe("View", () => {
+describe.skip("View", () => {
     beforeEach(() => {
         document.body.innerHTML = ""
         //   contextStack.length = 0

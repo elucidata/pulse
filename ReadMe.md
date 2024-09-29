@@ -132,79 +132,30 @@ Signals comply with Svelte's store contract:
 
 ## PulseView (Experimental)
 
-Included is a tiny experimental view engine you can play with... Feedback welcome. PulseView is closer to a stripped down solid-js than preact. Components are rendered only once, and updated based on signal changes. Plays well with `htm`.
-
-The API contains the usual suspects:
-
-```ts
-type Props = { [key: string]: any; };
-type ComponentFunction<P = Props> = (props?: P, children?: any) => HTMLElement | HTMLElement[] | Node | Node[];
-type ExtractComponentProps<F> = F extends ComponentFunction<infer P> ? P : never;
-
-declare function h(tag: string | ComponentFunction, props: Props | null, ...children: any[]): Node;
-declare const html: (strings: TemplateStringsArray, ...values: any[]) => Node | Node[];
-
-declare function setContext(key: any, value: any): void;
-declare function getContext<T>(key: any): T;
-
-declare function onMount(fn: () => void | (() => void)): void;
-
-declare function render(component: ComponentFunction, container: HTMLElement): () => void;
-```
+Included is a tiny experimental view engine you can play with... Feedback welcome. Pulse View is a declarative statement-based, reactive UI toolkit.
 
 ### Demo Usage
 
-Requires `htm` package to use template literals, otherwise us the `h` function (can be used with JSX/TSX too, if you like).
-
 ```ts
-import { signal, html, render } from "@elucidata/pulse/view"
+import { view, signal, render, tags, text } from '@elucidata/pulse/view';
 
-const count = signal(0)
+const { div, button } = tags;
 
-const Counter = () => {
-  return html`
-    <div>
-      <p>Counter: ${count}</p>
-      <button onclick=${() => count.value++}>Increment</button>
-      <button onclick=${() => count.value--}>Decrement</button>
-    </div>
-  `
-}
+const counter = signal(0);
 
-const OnEvens = () => {
-  onMount(() => {
-    console.log("count is even!", count.peek())
-    return () => {
-      console.log("even is unmounting")
-    }
-  })
-  return html`<div>Count is an even number! ${count}</div>`
-}
+const CounterView = view(() => {
+    div(() => {
+        button({ onClick: () => counter.value++ }, 'Increment');
+        button({ onClick: () => counter.value-- }, 'Decrement');
+        div(() => {
+            text('Count: ')
+            text(counter)
+        });
+    });
+});
 
-const App = () => {
-  return html`
-    <main>
-      <h1>Hello There</h1>
-      <${Counter} />
-      ${() => (count.value % 2 == 0 ? html`<${OnEvens} />` : null)}
-    </main>
-  `
-}
-
-render(App, document.getElementById("app"))
+const dispose = render(CounterView(), document.getElementById('app'))
 ```
-
-### Todo / Ideas
-
-Just to be clear, these aren't implemented yet... But I'm considering them.
-
-- **Integrated View Transitions**: Automatic view transition support.
-
-- **CSS Vars Attributes**: Pass CSS variables as attributes: 
-  
-  `<div class="Card" --padding="0"> ... </div>`
-
-- **X**: Y
 
 ## Utilities
 

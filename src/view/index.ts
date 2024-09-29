@@ -4,6 +4,7 @@ import {
     ReadonlySignal,
     Signal,
     untracked,
+    config,
 } from "../internals"
 import { applyStylesToDOM } from "./css"
 
@@ -106,7 +107,8 @@ export class View<P> {
     hooks = {
         onDispose: (callback: Function) => {
             if (View.active !== this) {
-                console.warn("onDispose() called outside of component")
+                config.verbose &&
+                    console.warn("onDispose() called outside of component")
                 return
             }
             if (!this.disposeCallbacks) {
@@ -134,7 +136,7 @@ export class View<P> {
         if (View.active) {
             View.active.dom.appendChild(child)
         } else {
-            console.warn("No active component")
+            config.verbose && console.warn("No active component")
         }
     }
 
@@ -172,14 +174,14 @@ export function getEnv(key: string) {
     if (View.active) {
         return View.active.getEnv(key)
     }
-    console.warn("No active view")
+    config.verbose && console.warn("No active view")
     return undefined
 }
 export function setEnv(key: string, value: any) {
     if (View.active) {
         View.active.setEnv(key, value)
     } else {
-        console.warn("No active component")
+        config.verbose && console.warn("No active component")
     }
 }
 
@@ -187,7 +189,7 @@ export function onDispose(callback: Function) {
     if (View.active) {
         View.active.hooks.onDispose(callback)
     } else {
-        console.warn("No active component")
+        config.verbose && console.warn("No active component")
     }
 }
 
@@ -220,7 +222,10 @@ export function when(
         activeView.dom.appendChild(startMarker)
         activeView.dom.appendChild(endMarker)
     } else {
-        console.warn("when(): No active component or view to append markers")
+        config.verbose &&
+            console.warn(
+                "when(): No active component or view to append markers"
+            )
         return
     }
 
@@ -266,7 +271,11 @@ export function when(
                     removeBetweenMarkers(startMarker, endMarker)
                     hasError = false
                 } catch (error) {
-                    console.error("Error removing 'when' error content:", error)
+                    config.verbose &&
+                        console.error(
+                            "Error removing 'when' error content:",
+                            error
+                        )
                 }
             }
 
@@ -275,7 +284,8 @@ export function when(
                     removeBetweenMarkers(startMarker, endMarker)
                     container = null
                 } catch (error) {
-                    console.warn("Error removing 'when' content:", error)
+                    config.verbose &&
+                        console.warn("Error removing 'when' content:", error)
                 }
             }
 
@@ -299,7 +309,8 @@ export function when(
 
                 insertBetweenMarkers(container, startMarker, endMarker)
             } catch (error) {
-                console.warn("Error in 'when' builder:", error)
+                config.verbose &&
+                    console.warn("Error in 'when' builder:", error)
                 removeBetweenMarkers(startMarker, endMarker)
                 displayError(startMarker, endMarker, error)
                 container = null
@@ -310,7 +321,7 @@ export function when(
             }
         },
         (err) => {
-            console.error("💥 Error in 'when' effect:", err)
+            config.verbose && console.error("💥 Error in 'when' effect:", err)
             removeBetweenMarkers(startMarker, endMarker)
             displayError(startMarker, endMarker, err)
             hasError = true
@@ -339,7 +350,10 @@ export function live(builder: () => void) {
         activeView.dom.appendChild(startMarker)
         activeView.dom.appendChild(endMarker)
     } else {
-        console.warn("live(): No active component or view to append markers")
+        config.verbose &&
+            console.warn(
+                "live(): No active component or view to append markers"
+            )
         return
     }
 
@@ -354,7 +368,8 @@ export function live(builder: () => void) {
                 removeBetweenMarkers(startMarker, endMarker)
                 hasError = false
             } catch (error) {
-                console.error("Error removing 'live' content:", error)
+                config.verbose &&
+                    console.error("Error removing 'live' content:", error)
             }
         }
 
@@ -363,7 +378,8 @@ export function live(builder: () => void) {
                 removeBetweenMarkers(startMarker, endMarker)
                 container = null
             } catch (error) {
-                console.warn("Error removing 'live' content:", error)
+                config.verbose &&
+                    console.warn("Error removing 'live' content:", error)
             }
         }
 
@@ -394,7 +410,7 @@ export function live(builder: () => void) {
 
             insertBetweenMarkers(container, startMarker, endMarker)
         } catch (error) {
-            console.warn("Error in 'live' builder:", error)
+            config.verbose && console.warn("Error in 'live' builder:", error)
             displayError(startMarker, endMarker, error)
             // container = null
             hasError = true
@@ -512,7 +528,7 @@ function element(
             })
             View.active?.hooks.onDispose(disposeLiveChildren)
         } else if (resultType != "undefined") {
-            console.error("Invalid children", result)
+            config.verbose && console.error("Invalid children", result)
         }
     })
 }
@@ -572,7 +588,7 @@ function displayError(startMarker: Comment, endMarker: Comment, error: any) {
         borderRadius: ".25rem",
         fontSize: ".75rem",
     })
-    errorMessage.textContent = `Error: ${
+    errorMessage.textContent = `[Pulse Error]: ${
         error instanceof Error ? error.message : String(error)
     }`
 

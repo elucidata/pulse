@@ -24,7 +24,7 @@ export const getHTML = (node: Node | Node[]) => {
     return div.innerHTML
 }
 
-describe("View TNG", () => {
+describe("View", () => {
     beforeEach(() => {
         document.head.innerHTML = ""
         document.body.innerHTML = ""

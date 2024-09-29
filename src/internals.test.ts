@@ -1,5 +1,5 @@
 import { describe, expect, it, spyOn, mock } from "bun:test"
-import { Signal, batch, computed, effect, event } from "./internals"
+import { Signal, batch, computed, config, effect, event } from "./internals"
 
 describe("Signals Module", () => {
     describe("Signal", () => {
@@ -176,7 +176,8 @@ describe("Signals Module", () => {
             expect(observedValue).toBe(1) // Should remain unchanged
         })
 
-        it("should log errors when effect cleanup throws", () => {
+        it("should log errors when effect cleanup throws in verbose config", () => {
+            config.verbose = true
             const consoleSpy = spyOn(console, "error")
             const signal = new Signal(1)
             let observedValue = 0
@@ -205,6 +206,7 @@ describe("Signals Module", () => {
             expect(consoleSpy).toHaveBeenCalled()
 
             consoleSpy.mockRestore()
+            config.verbose = false
         })
 
         it("should not run when disposed", () => {
