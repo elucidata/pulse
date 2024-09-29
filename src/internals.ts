@@ -232,6 +232,19 @@ export function effect(
     return () => computation.cleanup()
 }
 
+export function untracked(fn: () => void) {
+    const prevComputation = Computation.current
+    Computation.current = null
+    try {
+        fn()
+    } catch (error) {
+        console.error("Error in untracked", error)
+        throw error
+    } finally {
+        Computation.current = prevComputation
+    }
+}
+
 export function computed<T>(
     fn: () => T,
     onError?: (error: any) => void

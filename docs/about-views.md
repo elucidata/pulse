@@ -313,3 +313,47 @@ const dispose = render(
     document.getElementById("root")
 )
 ```
+
+Should the View return the builder function?
+
+
+```ts
+const { div, header, main, section } = tags
+
+const getFlash = () => getEnv("flashMessage")
+const setFlash = (message) => setEnv("flashMessage", message)
+
+const App = view((props, children) => {
+    setFlash(null)
+
+    return () => {
+        Page({name: 'User' }, () => {
+            div("content")
+        })
+    }
+})
+
+const Page = view((props, children) => {
+
+    return () => main(() => {
+        header(`Hello: ${props.name}`)
+        
+        when(() => !!getFlash().value, () => {
+            Banner(() => getFlash().value)
+        })
+
+        section({class: 'body'}, () => {
+            children()
+        })
+    })
+}).style(/*css*/`
+    .body { padding: 1rem; }
+`)
+
+const Banner = div.design.css`
+    background: dodgerblue;
+    color: white;
+    padding: 1rem;
+    border-radius: .5rem;
+`
+```

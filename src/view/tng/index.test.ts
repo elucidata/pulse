@@ -11,6 +11,7 @@ import {
     text,
     view,
     when,
+    onDispose,
 } from "./index"
 
 export const getHTML = (node: Node | Node[]) => {
@@ -363,7 +364,7 @@ describe("View TNG", () => {
 
     it("Should support onDispose hooks for components", () => {
         let disposed = false
-        const MyComponent = view((props, children, { onDispose }) => {
+        const MyComponent = view((props, children) => {
             expect(onDispose).toBeDefined()
             expect(onDispose).toBeInstanceOf(Function)
             onDispose(() => {

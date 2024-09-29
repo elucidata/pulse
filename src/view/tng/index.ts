@@ -3,6 +3,7 @@ import {
     isReadonlySignal,
     ReadonlySignal,
     Signal,
+    untracked,
 } from "../../internals"
 import { applyStylesToDOM } from "../css"
 
@@ -41,6 +42,14 @@ export function getEnv(key: string) {
 export function setEnv(key: string, value: any) {
     if (Component.active) {
         Component.active.setEnv(key, value)
+    } else {
+        console.warn("No active component")
+    }
+}
+
+export function onDispose(callback: Function) {
+    if (Component.active) {
+        Component.active.hooks.onDispose(callback)
     } else {
         console.warn("No active component")
     }
@@ -196,14 +205,29 @@ export function view<P>(builder: DomBuilder<P>): ComponentFactory<P> {
 function setElAttr(el: Element, key: string, value: any) {
     if (isReadonlySignal(value)) {
         const disposeLiveAttr = effect(() => {
-            console.debug("🐞 Setting LIVE attribute", key, value.peek())
+            // console.debug("🐞 Setting LIVE attribute", key, value.peek())
             el.setAttribute(key, String(value.value))
         })
-        console.debug("🐞 (Tracking effect dispose function)")
+        // console.debug("🐞 (Tracking effect dispose function)")
         Component.active?.hooks.onDispose(disposeLiveAttr)
     } else {
-        console.debug("🐞 Setting STATIC attribute", key, value)
+        // console.debug("🐞 Setting STATIC attribute", key, value)
         el.setAttribute(key, String(value))
+    }
+}
+function setElProp(el: Element, key: string, value: any) {
+    if (isReadonlySignal(value)) {
+        const disposeLiveAttr = effect(() => {
+            // console.debug("🐞 Setting LIVE prop", key, value.peek())
+            ;(el as any)[key] = value.value
+            // el.setAttribute(key, String(value.value))
+        })
+        // console.debug("🐞 (Tracking effect dispose function)")
+        Component.active?.hooks.onDispose(disposeLiveAttr)
+    } else {
+        // console.debug("🐞 Setting STATIC prop", key, value)
+        ;(el as any)[key] = value
+        // el.setAttribute(key, String(value))
     }
 }
 
@@ -230,17 +254,20 @@ function elem(
 
     for (const key in props) {
         if (key === "class" || key === "className") {
-            setElAttr(el, "className", props[key])
+            setElProp(el, "className", props[key])
+            // setElAttr(el, "className", props[key])
             // el.className = props[key]
         } else if (key.startsWith("on")) {
             el.addEventListener(key.slice(2).toLowerCase(), props[key])
         } else if (key === "style") {
             el.style.cssText = props[key]
         } else if (key === "html") {
-            setElAttr(el, "innerHTML", props[key])
+            setElProp(el, "innerHTML", props[key])
+            // setElAttr(el, "innerHTML", props[key])
             // el.innerHTML = props[key]
         } else if (key === "for") {
-            setElAttr(el, "htmlFor", props[key])
+            setElProp(el, "htmlFor", props[key])
+            // setElAttr(el, "htmlFor", props[key])
             // ;(el as HTMLLabelElement).htmlFor = props[key]
         } else if (key === "ref") {
             // Should this happen now, or after the element is added to the DOM?
@@ -359,11 +386,13 @@ export function when(
                 Component.activeView = container
                 Component.active = null // or set to an appropriate value if needed
 
-                if (runThenBuilder) {
-                    thenBuilder()
-                } else if (elseBuilder) {
-                    elseBuilder()
-                }
+                untracked(() => {
+                    if (runThenBuilder) {
+                        thenBuilder()
+                    } else if (elseBuilder) {
+                        elseBuilder()
+                    }
+                })
 
                 insertBetweenMarkers(container, startMarker, endMarker)
             } catch (error) {
@@ -378,7 +407,7 @@ export function when(
             }
         },
         (err) => {
-            console.error("💥 Error in 'when' condition:", err)
+            console.error("💥 Error in 'when' effect:", err)
             removeBetweenMarkers(startMarker, endMarker)
             displayError(startMarker, endMarker, err)
             hasError = true
