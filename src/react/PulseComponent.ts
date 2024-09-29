@@ -10,7 +10,7 @@ export const PulseComponent = React.memo(function PulseComponent<
 
   React.useEffect(
     () => () => {
-      console.log("[PulseComponent] unmounting", typeof disposeRef.current)
+      // console.log("[PulseComponent] unmounting", typeof disposeRef.current)
       divRef.current = null
       disposeRef.current?.()
       disposeRef.current = null
@@ -21,14 +21,14 @@ export const PulseComponent = React.memo(function PulseComponent<
   return React.createElement("div", {
     ref: (div: HTMLDivElement | null) => {
       if (!div) {
-        return console.log("[PulseComponent] ref: div is null")
+        return //console.log("[PulseComponent] ref: div is null")
       }
       divRef.current = div
       if (disposeRef.current) {
-        return console.warn("[PulseComponent] already mounted")
+        return //console.warn("[PulseComponent] already mounted")
       }
       disposeRef.current = render(component, div)
-      console.log("[PulseComponent] mounted", typeof disposeRef.current)
+      // console.log("[PulseComponent] mounted", typeof disposeRef.current)
     },
   })
 })

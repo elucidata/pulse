@@ -148,7 +148,7 @@ class View {
 Example usage:
 
 ```ts
-import { view, tags, designer, slot, list, css, signal, effect, hasChildren } from '@elucidata/pulse/view`
+import { view, tags, designer, when, slot, list, css, signal, effect, hasChildren } from '@elucidata/pulse/view`
 
 const { A, Div, Section, Main, Header, H1, Button. Aside } = tags
 
@@ -161,10 +161,10 @@ const Page = view(() => {
     H1("Hello There")
   })
 
-  Section((class:'counter') => {
+  Section({class:'counter'}, () => {
     P(() => {
       text("Counter: ")
-      live(signal)
+      text(signal)
     })
     Button({ onclick: increment }, () => "Increment")
   })
@@ -183,21 +183,118 @@ const Page = view(() => {
   }
 `)
 
-const QuipPanel = view((props, children) => {
+
+const QuipPanel = view((props, children, { onDispose }) => {
+  const loading = signal(true)
+  const error = signal(null)
+  cosnt items = signal([])
+  const abort = new AbortController()
+
+  fetch(`/users/${props.username}`, { signal: abort })
+    .then(r => r.json())
+    .then(data => items.set(data))
+    .catch(err => error.set(err))
+    .finally(() => loading.set(false))
+
+  onDispose(() => {
+    // this component is being removed from the Dom...
+    abort.abort()
+  })
+
+
   Aside(() => {
     Header(() => {
-
+      when(loading, () => {
+        text("Loading...")
+      }, () => {
+        text(items?.length ?? 0 +" Quips")
+      })
+    })
+    when(() => error.value !== null, ()=> {
+      ErrorMessage(() => {
+        text("There was an error loading quips: ")
+        text(error)
+      })
+    })
+    Div({ class: 'QuipList' }, () => {
+      list(() => {
+        items.forEach(item => {
+          // Each call under a list is a new row
+          HStack(() => 
+            VStack(() => {
+              H3(() => item.title)
+              P(item.body)
+            })
+          }).key(item.id)
+        })
+      })
     })
   })
+
   when(() => hasChildren(children), () => {
-    Message(() => slot(children))
+    Message(() => children()))
   }) 
-})
+}).styles(/*css*/`
+  .QuipList {}
+`)
 
 const Message = Div.design.css`
   padding: 1rem;
   background: dodgerblue;
   color: white;
 `
+const ErrorMessage = Message.design.css`
+  background: crimson;
+`
+const HStack = Div.design.css`
+  display: flex;
+`
+const Spacer =  Div.design.css`
+  flex: 1;
+`
+```
 
+- Should there be a top-level `app` builder that manages an environment map that all components within can access? Or would it make sense for each component to reference their parent's `env` and the root component of a render becomes the owner of the `env`?
+  - Note: This isn't a `Context` in the React sense. It's data associated with an entire render tree, not just sections of it. It's also a shared pool (literally a Map) of data, it's not a prototype chain, entries can't be masked.
+
+```ts
+const App = app(({ setEnv }, params) => {
+  setEnv("mode", params.mode || "debug")
+  Page()
+})
+
+const Page = view(() => {
+  const mode = getEnv("mode")
+
+  if(mode == "debug") console.log("I'm in debug mode.")
+
+  div("hello")
+})
+
+// Third param is an optional params object to send to the app 
+const dispose = render(App(), document.getElementById('root'), {
+  mode: 'production'
+})
+```
+
+This could be done using existing `view` design.
+
+```ts
+const App = view((params, children) => {
+  setEnv("mode", params.mode || "debug")
+  Page()
+})
+
+const Page = view(() => {
+  const mode = getEnv("mode")
+
+  if(mode == "debug") console.log("I'm in debug mode.")
+
+  div("hello")
+})
+ 
+const dispose = render(
+  App({ mode: 'production' }), 
+  document.getElementById('root')
+)
 ```

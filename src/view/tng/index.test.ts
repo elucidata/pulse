@@ -1,5 +1,15 @@
 import { beforeEach, describe, expect, it } from "bun:test"
-import { view, render, text, when, tags, Component, activeRoots } from "./index"
+import {
+  view,
+  render,
+  text,
+  when,
+  tags,
+  Component,
+  activeRoots,
+  setEnv,
+  getEnv,
+} from "./index"
 import { signal } from "../../internals"
 const show = when
 export const getHTML = (node: Node | Node[]) => {
@@ -27,7 +37,6 @@ describe("View TNG", () => {
 
   it("Should render simple HTML elements", () => {
     const Test = view(() => {
-      console.log("Inside Test dom builder")
       tags.div({}, () => "Hello World")
     })
 
@@ -101,7 +110,7 @@ describe("View TNG", () => {
   it("Should render children that return signals", () => {
     const count = signal(0)
     const MyComponent = view(() => {
-      tags.div({}, () => count)
+      tags.div(() => count)
     })
 
     expect(MyComponent).toBeDefined()
@@ -111,6 +120,47 @@ describe("View TNG", () => {
 
     count.set(1)
     expect(document.body.innerHTML).toContain("<div>1</div>")
+  })
+
+  it("Should support nested components", () => {
+    const ChildComponent = view(() => {
+      tags.div({}, () => text("Hello"))
+    })
+
+    const MyComponent = view(() => {
+      ChildComponent()
+
+      tags.div(() => {
+        text("World")
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("Hello")
+    expect(document.body.innerHTML).toContain("World")
+  })
+
+  it("Should support correct rendering order of nested components", () => {
+    const ChildA = view(() => {
+      text("Hello")
+    })
+
+    const ChildB = view(() => {
+      text("World")
+    })
+
+    const MyComponent = view(() => {
+      ChildA()
+      text(" ")
+      ChildB()
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("Hello World")
   })
 
   it("Should support conditional rendering", () => {
@@ -141,8 +191,83 @@ describe("View TNG", () => {
     expect(document.body.innerHTML).not.toContain("Hello")
 
     display.set(true)
-    console.log(document.body.innerHTML)
     expect(document.body.innerHTML).toContain("Error")
+  })
+
+  it("Should support conditional fallback", () => {
+    const display = signal(false)
+
+    const MyComponent = view(() => {
+      tags.div({}, () => {
+        when(
+          display,
+          () => {
+            tags.div({}, () => "HELLO")
+          },
+          () => {
+            tags.div({}, () => "CRICKETS")
+          }
+        )
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("CRICKETS")
+
+    display.set(true)
+    expect(document.body.innerHTML).toContain("HELLO")
+
+    display.set(false)
+    expect(document.body.innerHTML).toContain("CRICKETS")
+  })
+
+  it("Should support onDispose hooks for components", () => {
+    let disposed = false
+    const MyComponent = view((props, children, { onDispose }) => {
+      expect(onDispose).toBeDefined()
+      expect(onDispose).toBeInstanceOf(Function)
+      onDispose(() => {
+        disposed = true
+      })
+      tags.div(() => {
+        text("Hello")
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+    const remove = render(MyComponent(), document.body)
+
+    expect(disposed).toBeFalse()
+    expect(document.body.innerHTML).toContain("Hello")
+
+    remove()
+    expect(document.body.innerHTML).not.toContain("Hello")
+    expect(disposed).toBeTrue()
+  })
+
+  it("Should support environment variables", () => {
+    const MyComponent = view(() => {
+      setEnv("name", "test")
+
+      ChildComponent()
+    })
+    const ChildComponent = view(() => {
+      const name = getEnv("name")
+
+      tags.div({}, () => {
+        text("Hello")
+        text(name)
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    const remove = render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("Hello")
+    expect(document.body.innerHTML).toContain("test")
+    remove()
   })
 
   // it.skip("Should support complex conditional rendering", () => {

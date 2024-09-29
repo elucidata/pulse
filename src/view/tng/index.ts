@@ -7,7 +7,14 @@ import {
 import { applyStylesToDOM } from "../css"
 
 type Children = () => void | string | number | Signal<any>
-type DomBuilder<P = any> = (props: P, children: Children) => void
+type ComponentHooks = {
+  onDispose: (callback: Function) => void
+}
+type DomBuilder<P = any> = (
+  props: P,
+  children: Children,
+  api: ComponentHooks
+) => void
 
 type View<P> = {
   (props: P, children: Children): ViewOutput<P>
@@ -21,10 +28,27 @@ const EMPTY_PROPS = {}
 const EMPTY_CHILDREN = () => {}
 export const activeRoots = new Set<Component<any>>()
 
+export function getEnv(key: string) {
+  if (Component.active) {
+    return Component.active.getEnv(key)
+  }
+  console.warn("No active component")
+  return undefined
+}
+export function setEnv(key: string, value: any) {
+  if (Component.active) {
+    Component.active.setEnv(key, value)
+  } else {
+    console.warn("No active component")
+  }
+}
+
 export class Component<P> {
   readonly dom: DocumentFragment
   readonly parent: Component<any> | null = null
   readonly children: Set<Component<any>> = new Set()
+
+  env?: Map<string, any>
 
   constructor(private _builder: DomBuilder, args: any[]) {
     this.parent = Component.active
@@ -36,11 +60,59 @@ export class Component<P> {
     const [props, children] = extractPropsAndChildren<P>(args)
 
     Component.active = this
-    this._builder(props, children)
+    const prevActiveView = Component.activeView
+    Component.activeView = this.dom
+    this._builder(props, children, this.hooks)
     Component.active = this.parent
+    Component.activeView = prevActiveView
+
+    if (this.parent) {
+      this.parent.dom.appendChild(this.dom)
+    }
+  }
+
+  getEnv<T = any>(key: string): T | undefined {
+    if (!this.env) {
+      return !!this.parent ? this.parent.getEnv<T>(key) : undefined
+    }
+    return this.env.get(key) as T
+  }
+  setEnv(key: string, value: any) {
+    if (!this.env) {
+      if (!!this.parent) {
+        this.parent.setEnv(key, value)
+        return
+      }
+      this.env = new Map()
+    }
+    this.env.set(key, value)
+  }
+
+  disposeCallbacks: Set<Function> | null = null
+
+  hooks = {
+    onDispose: (callback: Function) => {
+      if (Component.active !== this) {
+        console.warn("onDispose() called outside of component")
+        return
+      }
+      if (!!Component.activeView && Component.activeView !== this.dom) {
+        console.warn(
+          "onDispose() called outside of component view, this might cause unexpected behavior."
+        )
+      }
+      if (!this.disposeCallbacks) {
+        this.disposeCallbacks = new Set()
+      }
+      this.disposeCallbacks.add(callback)
+    },
   }
 
   dispose() {
+    if (this.disposeCallbacks) {
+      this.disposeCallbacks.forEach((callback) => callback())
+      this.disposeCallbacks.clear()
+    }
     this.children.forEach((child) => child.dispose())
     if (this.parent) this.parent.children.delete(this)
     console.assert(this.children.size === 0, "Children not disposed")
@@ -165,13 +237,14 @@ function elem(
  * Conditionally renders a view based on a boolean condition.
  *
  * @param condition A function that returns a boolean value (for use in a computation)
- * @param builder When the condition is true, this function is called to build the view, otherwise it is skipped/torn down.
+ * @param thenBuilder When the condition is true, this function is called to build the view, otherwise it is skipped/torn down.
  */
 export function when(
   condition:
     | ReadonlySignal<boolean>
     | (() => boolean | ReadonlySignal<boolean>),
-  builder: () => void
+  thenBuilder: () => void,
+  elseBuilder?: () => void
 ) {
   const id = Math.random().toString(36).slice(2)
   const activeComponent = Component.active
@@ -198,14 +271,14 @@ export function when(
   let hasError = false
 
   effect(() => {
-    let runBuilder: boolean | ReadonlySignal<boolean> = false
+    let runThenBuilder: boolean | ReadonlySignal<boolean> = false
     if (isReadonlySignal(condition)) {
-      runBuilder = condition.value
+      runThenBuilder = condition.value
     } else {
-      runBuilder = condition()
+      runThenBuilder = condition()
     }
-    if (isReadonlySignal(runBuilder)) {
-      runBuilder = runBuilder.value
+    if (isReadonlySignal(runThenBuilder)) {
+      runThenBuilder = runThenBuilder.value
     }
 
     if (hasError) {
@@ -218,7 +291,16 @@ export function when(
       }
     }
 
-    if (runBuilder) {
+    if (runThenBuilder) {
+      if (container) {
+        try {
+          removeBetweenMarkers(startMarker, endMarker)
+          container = null
+        } catch (error) {
+          console.warn("Error removing 'when' content:", error)
+        }
+      }
+
       if (!container) {
         container = document.createDocumentFragment()
 
@@ -227,7 +309,7 @@ export function when(
           const prevView = Component.activeView
           Component.activeView = container
 
-          builder()
+          thenBuilder()
 
           Component.activeView = prevView
           Component.active = prevComponent
@@ -249,6 +331,28 @@ export function when(
           console.warn("Error removing 'when' content:", error)
         }
       }
+
+      if (!elseBuilder) return
+
+      container = document.createDocumentFragment()
+
+      try {
+        const prevComponent = Component.active
+        const prevView = Component.activeView
+        Component.activeView = container
+
+        elseBuilder()
+
+        Component.activeView = prevView
+        Component.active = prevComponent
+
+        insertBetweenMarkers(container, startMarker, endMarker)
+      } catch (error) {
+        console.warn("Error in 'when' builder:", error)
+        displayError(startMarker, endMarker, error)
+        container = null
+        hasError = true
+      }
     }
   })
 }
@@ -257,16 +361,20 @@ export function text(value: string) {
   Component.appendToActiveView(document.createTextNode(value))
 }
 
-export const tags: { [key: string]: View<any> } = new Proxy(
-  {},
-  {
-    get(target, key) {
+export function raw(html: string) {
+  Component.appendToActiveView(
+    document.createRange().createContextualFragment(html)
+  )
+}
+
+export const tags: { [key in keyof HTMLElementTagNameMap]: View<any> } =
+  new Proxy({} as any, {
+    get(target, key: any) {
       return function (props: any, children: Children) {
-        return elem(String(key), props, children)
+        return elem(String(key).toLowerCase(), props, children)
       }
     },
-  }
-)
+  })
 
 function extractPropsAndChildren<P>(args: any[]): [P, Children] {
   if (args.length === 0) {
@@ -298,14 +406,10 @@ export function render(component: Component<any>, target: HTMLElement) {
   let isDisposed = false
   return () => {
     if (isDisposed) return
+    component.dispose()
     removeBetweenMarkers(startMarker, endMarker)
-    // const range = document.createRange()
-    // range.setStartAfter(startMarker)
-    // range.setEndBefore(endMarker)
-    // range.deleteContents()
     target.removeChild(startMarker)
     target.removeChild(endMarker)
-    component.dispose()
     activeRoots.delete(component)
     isDisposed = true
   }
@@ -324,15 +428,17 @@ function removeBetweenMarkers(start: Comment, end: Comment) {
   range.deleteContents()
 }
 
-/**
- * Inserts an error message into the DOM between the provided markers.
- */
 function displayError(startMarker: Comment, endMarker: Comment, error: any) {
   const errorMessage = document.createElement("div")
-  errorMessage.style.color = "red"
-  errorMessage.style.border = "1px solid red"
-  errorMessage.style.padding = "8px"
-  errorMessage.style.margin = "8px 0"
+  Object.assign(errorMessage.style, {
+    color: "white",
+    border: "0.1rem solid crimson",
+    padding: ".25rem .5rem",
+    margin: "0.25rem 0",
+    background: "maroon",
+    borderRadius: ".25rem",
+    fontSize: ".75rem",
+  })
   errorMessage.textContent = `Error: ${
     error instanceof Error ? error.message : String(error)
   }`
