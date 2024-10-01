@@ -134,11 +134,23 @@ Signals comply with Svelte's store contract:
 
 Included is a tiny experimental view engine you can play with... Feedback welcome. Pulse View is a declarative statement-based, reactive UI toolkit.
 
-- No virtual DOM. 
-  - Live DOM nodes are created and deleted by builders. 
-  - Updates are reactions to signal values only. 
-  - Sections of a view can be reactive when denoted with `when`, `each`, or `live`.
+- No virtual DOM. Live DOM nodes are created and deleted by builders. 
+- Updates are reactions to signal values only. 
+- Sections of a view can be reactive when denoted with `when`, `each`, or `live`.
+  
+### The Tao of PulseView
 
+Pulse View is guided by a set of high-level principles:
+
+1. **Dynamic View Management**: Views in Pulse View are dynamically built and removed as needed.
+
+2. **Signal-Driven Updates**: All updates within Pulse View are driven by signal reactions. 
+
+3. **Modularity and Reusability**: Components within Pulse View are designed to be modular and reusable. 
+
+4. **Performance Optimization**: Pulse View is optimized for performance, ensuring that even with dynamic view management and signal-driven updates, the application remains fast and responsive.
+
+  
 ### Demo Usage
 
 ```ts

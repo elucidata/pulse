@@ -6,7 +6,7 @@ import {
   Signal,
   untracked,
 } from "../internals"
-import { applyStylesToDOM } from "./css"
+import { css as cssTemplate, applyStylesToDOM, withAutoScope } from "./css"
 
 export * from "../internals"
 
@@ -21,19 +21,25 @@ type Children = () => void | string | number | Signal<any>
 type ViewHooks = {
   onDispose: (callback: Function) => void
 }
-type ViewOutput<P = any> = View<P>
 type DomBuilder<P = any> = (
   props: P,
   children: Children,
   api: ViewHooks
 ) => void
-
-type ElementBuilder<P> = {
-  (props: P, children: Children): ViewOutput<P>
-  (props: P): ViewOutput<P>
-  (children: Children): ViewOutput<P>
-  (): ViewOutput<P>
+type Designable = {
+  design: {
+    css(
+      styles: TemplateStringsArray | string,
+      ...args: any[]
+    ): ElementBuilder<any> & Designable
+  }
 }
+type ElementBuilder<P> = {
+  (props: P, children: Children): void
+  (props: P): void
+  (children: Children): void
+  (): void
+} & Designable
 
 const NOOP = () => {}
 const EMPTY_PROPS = {}
@@ -220,9 +226,9 @@ export class View<P> {
  * @param key
  * @returns The value of the environment variable or `undefined` if it doesn't exist.
  */
-export function getEnv(key: string) {
+export function getEnv<T>(key: string): T | undefined {
   if (View.active) {
-    return View.active.getEnv(key)
+    return View.active.getEnv<T>(key)
   }
   config.verbose && console.warn("No active view")
   return undefined
@@ -614,11 +620,32 @@ export const tags: {
   [key in keyof HTMLElementTagNameMap]: ElementBuilder<any>
 } = new Proxy({} as any, {
   get(target, key: any) {
-    return function (props: any, children: Children) {
-      return element(String(key).toLowerCase(), props, children)
+    if (!(key in target)) {
+      target[key] = createElement(String(key).toLowerCase())
     }
+    return target[key]
   },
 })
+
+function createElement(
+  tag: string,
+  className: string = ""
+): ElementBuilder<any> {
+  return Object.assign(
+    function Element(props: any, children: Children) {
+      return element(tag, props, children, className)
+    } as ElementBuilder<any>,
+    {
+      design: {
+        css: (styles: TemplateStringsArray | string, ...args: any[]) => {
+          const src = typeof styles === "string" ? [styles] : styles
+          const css = withAutoScope(() => cssTemplate(src as any, ...args))
+          return createElement(tag, `${css} ${className}`.trim())
+        },
+      },
+    }
+  )
+}
 
 /**
  * Renders a view instance into a target element.
@@ -657,7 +684,8 @@ export function render(viewInstance: View<any>, target: HTMLElement) {
 function element(
   name: string,
   props: any = EMPTY_PROPS,
-  children: Children = EMPTY_CHILDREN
+  children: Children = EMPTY_CHILDREN,
+  customClass: string = ""
 ) {
   const el = document.createElement(name)
 
@@ -702,6 +730,8 @@ function element(
       setElAttr(el, key, props[key])
     }
   }
+
+  if (!!customClass) el.classList.add(customClass)
 
   View.appendToActiveElement(el)
 

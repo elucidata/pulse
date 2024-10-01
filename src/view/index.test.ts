@@ -251,6 +251,67 @@ describe("View", () => {
     expect(document.body.innerHTML).toContain("Hello World")
   })
 
+  it("Should support designed elements", () => {
+    const Warning = tags.div.design.css`
+      color: red;
+    `
+    const MyComponent = view(() => {
+      tags.div({ class: "test" }, () => {
+        Warning(() => text("Hello"))
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    console.log(document.body.innerHTML)
+    expect(document.body.innerHTML).toContain("Hello")
+    expect(document.body.innerHTML).toContain("test")
+    expect(document.body.innerHTML).toContain("css-")
+  })
+
+  it("Should designed elements that are designable", () => {
+    const Message = tags.div.design.css`
+      padding: 1rem;
+    `
+    const Warning = Message.design.css`
+      color: red;
+    `
+    const MyComponent = view(() => {
+      tags.div({ class: "test" }, () => {
+        Warning(() => text("Hello"))
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    console.log(document.body.innerHTML)
+    expect(document.body.innerHTML).toContain("Hello")
+    expect(document.body.innerHTML).toContain("test")
+    expect(document.body.innerHTML).toContain("css-")
+    expect(document.body.innerHTML.match(/css-/g)?.length).toEqual(2)
+  })
+
+  it("Should support designed elements with alt syntax", () => {
+    const Warning = tags.div.design.css(/* css */ `
+      color: red;
+    `)
+    const MyComponent = view(() => {
+      tags.div({ class: "test" }, () => {
+        Warning(() => text("Hello"))
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    console.log(document.body.innerHTML)
+    expect(document.body.innerHTML).toContain("Hello")
+    expect(document.body.innerHTML).toContain("test")
+    expect(document.body.innerHTML).toContain("css-")
+  })
+
   it("Should support conditional rendering with `when` block", () => {
     const display = signal(false)
 
@@ -562,7 +623,7 @@ describe("View", () => {
       ChildComponent()
     })
     const ChildComponent = view(() => {
-      const name = getEnv("name")
+      const name = getEnv("name") as any
 
       tags.div({}, () => {
         text("Hello")
