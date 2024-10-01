@@ -5,19 +5,19 @@ let autoScopeStyles = false
 let validateCss = true
 
 export const withAutoScope = <T>(worker: () => T) => {
-    const prev = autoScopeStyles
-    autoScopeStyles = true
-    const result = worker()
-    autoScopeStyles = prev
-    return result
+  const prev = autoScopeStyles
+  autoScopeStyles = true
+  const result = worker()
+  autoScopeStyles = prev
+  return result
 }
 
 export const withoutValidation = <T>(worker: () => T) => {
-    const prev = validateCss
-    validateCss = false
-    const result = worker()
-    validateCss = prev
-    return result
+  const prev = validateCss
+  validateCss = false
+  const result = worker()
+  validateCss = prev
+  return result
 }
 
 /**
@@ -38,29 +38,29 @@ export const styleCache = new Map<string, string>()
  * @returns Generated class name
  */
 export function css(
-    styles: TemplateStringsArray,
-    ...expressions: any[]
+  styles: TemplateStringsArray,
+  ...expressions: any[]
 ): string {
-    let styleString = styles.reduce((acc, curr, idx) => {
-        return acc + curr + (expressions[idx] || "")
-    }, "")
+  let styleString = styles.reduce((acc, curr, idx) => {
+    return acc + curr + (expressions[idx] || "")
+  }, "")
 
-    styleString = styleString.trim()
-    if (autoScopeStyles && !styleString.startsWith(HOST_SYMBOL)) {
-        styleString = `${HOST_SYMBOL} { ${styleString} }`
-    }
+  styleString = styleString.trim()
+  if (autoScopeStyles && !styleString.startsWith(HOST_SYMBOL)) {
+    styleString = `${HOST_SYMBOL} { ${styleString} }`
+  }
 
-    const hash = crcHash(styleString)
-    const className = `css-${hash}`
-    const updatedStyles = styleString.replace(HOST_REGEX, `.${className}`)
+  const hash = crcHash(styleString)
+  const className = `css-${hash}`
+  const updatedStyles = styleString.replace(HOST_REGEX, `.${className}`)
 
-    if (validateCss) {
-        assertValidCSS(updatedStyles)
-    }
+  if (validateCss) {
+    assertValidCSS(updatedStyles)
+  }
 
-    applyStyles(className, updatedStyles)
+  applyStyles(className, updatedStyles)
 
-    return className
+  return className
 }
 
 type Truthy = string | number | boolean | null | undefined
@@ -72,77 +72,77 @@ type ClassValue = string | Record<string, Truthy> | undefined | null | false
  * keys with truthy values will be included.
  */
 export function classNames(...classes: ClassValue[]): string {
-    return classes
-        .map((cls) => {
-            if (typeof cls === "string" && cls !== "") {
-                return cls.trim()
-            } else if (typeof cls === "object" && cls !== null) {
-                return Object.entries(cls)
-                    .filter(([, value]) => value)
-                    .map(([key]) => String(key).trim())
-                    .join(" ")
-            } else {
-                return ""
-            }
-        })
-        .filter(Boolean)
-        .join(" ")
-        .trim()
+  return classes
+    .map((cls) => {
+      if (typeof cls === "string" && cls !== "") {
+        return cls.trim()
+      } else if (typeof cls === "object" && cls !== null) {
+        return Object.entries(cls)
+          .filter(([, value]) => value)
+          .map(([key]) => String(key).trim())
+          .join(" ")
+      } else {
+        return ""
+      }
+    })
+    .filter(Boolean)
+    .join(" ")
+    .trim()
 }
 
 function crcHash(str: string): number {
-    let hash = 0
-    for (let i = 0; i < str.length; i++) {
-        hash = (hash << 5) - hash + str.charCodeAt(i)
-        hash |= 0
-    }
-    return hash
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i)
+    hash |= 0
+  }
+  return hash
 }
 
 export function applyStyles(className: string, styles: string): void {
-    if (styleCache.has(className)) {
-        return console.debug("Styles already applied", className)
-    }
-    styleCache.set(className, styles)
-    applyStylesToDOM(styles)
+  if (styleCache.has(className)) {
+    return console.debug("Styles already applied", className)
+  }
+  styleCache.set(className, styles)
+  applyStylesToDOM(styles)
 }
 
 export function applyStylesToDOM(styles: string): boolean {
-    const target = getStyleParent()
-    if (!target || !document) {
-        return false
-    }
-    // if target != null, it's implied that document is available
-    if ("adoptedStyleSheets" in document) {
-        const style = new CSSStyleSheet()
-        style.replaceSync(styles)
-        document.adoptedStyleSheets = [...document.adoptedStyleSheets, style]
-    } else {
-        const style = (document as any).createElement("style")
-        style.textContent = styles
-        target.appendChild(style)
-    }
-    return true
+  const target = getStyleParent()
+  if (!target || !document) {
+    return false
+  }
+  // if target != null, it's implied that document is available
+  if ("adoptedStyleSheets" in document) {
+    const style = new CSSStyleSheet()
+    style.replaceSync(styles)
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, style]
+  } else {
+    const style = (document as any).createElement("style")
+    style.textContent = styles
+    target.appendChild(style)
+  }
+  return true
 }
 
 /** Returns the mount target for styles, or null if not in a document context. */
 function getStyleParent(): HTMLElement | null {
-    if (typeof document === "undefined") {
-        // console.warn("No document found")
-        return null
-    }
-    return document.head || document.body
+  if (typeof document === "undefined") {
+    // console.warn("No document found")
+    return null
+  }
+  return document.head || document.body
 }
 
 function assertValidCSS(styles: string) {
-    // Validate that the number of closing brackets matches the number of opening brackets
-    let openBrackets = 0
-    let closeBrackets = 0
-    for (let i = 0; i < styles.length; i++) {
-        if (styles[i] === "{") openBrackets++
-        else if (styles[i] === "}") closeBrackets++
-    }
-    if (openBrackets !== closeBrackets) {
-        throw new Error("Invalid CSS: Bracket mismatch.")
-    }
+  // Validate that the number of closing brackets matches the number of opening brackets
+  let openBrackets = 0
+  let closeBrackets = 0
+  for (let i = 0; i < styles.length; i++) {
+    if (styles[i] === "{") openBrackets++
+    else if (styles[i] === "}") closeBrackets++
+  }
+  if (openBrackets !== closeBrackets) {
+    throw new Error("Invalid CSS: Bracket mismatch.")
+  }
 }

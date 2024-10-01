@@ -11,34 +11,34 @@ export type Merger<T> = Partial<T> | ((v: T) => Partial<T>)
  *
  */
 export function update<T>(
-    state: Signal<T>,
-    updater: Updater<T> | Merger<T>,
-    reportChanges = false
+  state: Signal<T>,
+  updater: Updater<T> | Merger<T>,
+  reportChanges = false
 ): void | (keyof T)[] {
-    const oldState = state.peek()
-    const newState = typeof updater === "function" ? updater(oldState) : updater
-    const isScalar = typeof newState !== "object" || newState === null
-    if (isScalar) {
-        return state.set(newState as T)
-    } else {
-        const updatedState = { ...oldState, ...newState }
-        state.set(updatedState)
-        return reportChanges ? changedFields(oldState, updatedState) : void 0
-    }
+  const oldState = state.peek()
+  const newState = typeof updater === "function" ? updater(oldState) : updater
+  const isScalar = typeof newState !== "object" || newState === null
+  if (isScalar) {
+    return state.set(newState as T)
+  } else {
+    const updatedState = { ...oldState, ...newState }
+    state.set(updatedState)
+    return reportChanges ? changedFields(oldState, updatedState) : void 0
+  }
 }
 
 function changedFields<T extends Record<string | symbol, any>>(
-    oldState: T,
-    newState: T
+  oldState: T,
+  newState: T
 ): (keyof T)[] {
-    let oldKeys = Reflect.ownKeys(oldState)
-    let newKeys = Reflect.ownKeys(newState)
+  let oldKeys = Reflect.ownKeys(oldState)
+  let newKeys = Reflect.ownKeys(newState)
 
-    let addedKeys = newKeys.filter((key) => !oldKeys.includes(key))
-    let removedKeys = oldKeys.filter((key) => !newKeys.includes(key))
-    let changedKeys = oldKeys.filter(
-        (key) => oldState[key] !== newState[key]
-    ) as (keyof T)[]
+  let addedKeys = newKeys.filter((key) => !oldKeys.includes(key))
+  let removedKeys = oldKeys.filter((key) => !newKeys.includes(key))
+  let changedKeys = oldKeys.filter(
+    (key) => oldState[key] !== newState[key]
+  ) as (keyof T)[]
 
-    return [...addedKeys, ...removedKeys, ...changedKeys]
+  return [...addedKeys, ...removedKeys, ...changedKeys]
 }

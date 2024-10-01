@@ -1,56 +1,57 @@
 {
-    "name": "@elucidata/pulse",
-    "version": "2.1.0",
-    "description": "Microscopic signals with automatic dependency tracking.",
-    "module": "dist/index.js",
-    "type": "module",
-    "main": "dist/index.js",
-    "author": "Matthew Mccray",
-    "license": "MIT",
-    "exports": {
-        ".": {
-            "import": "./dist/index.js"
-        },
-        "./react": {
-            "import": "./dist/react/index.js"
-        },
-        "./utils": {
-            "import": "./dist/utils/index.js"
-        },
-        "./view": {
-            "import": "./dist/view/index.js"
-        },
-        "./view-legacy/html": {
-            "import": "./dist/view-legacy/html.js"
-        },
-        "./view-legacy": {
-            "import": "./dist/view-legacy/index.js"
-        }
+  "name": "@elucidata/pulse",
+  "version": "2.1.0",
+  "description": "Microscopic signals with automatic dependency tracking.",
+  "module": "dist/index.js",
+  "type": "module",
+  "main": "dist/index.js",
+  "author": "Matthew Mccray",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
     },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/elucidata/pulse.git"
+    "./react": {
+      "import": "./dist/react/index.js"
     },
-    "scripts": {
-        "dist:tsup": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --minify --external react  && bun run stats",
-        "dist": "rm -rf dist && tsc && bun run stats",
-        "dist:dev": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --external react  --no-splitting  && bun run stats",
-        "stats": "bun run ./tools/stats.ts",
-        "stats:old": "echo \"all gzipped:\" && bun run stats:all",
-        "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils/index.js dist/react/index.js dist/view/index.js dist/view/html.js | wc -c | numfmt --to=si",
-        "prepublish": "bun run dist",
-        "test": "bun test"
+    "./utils": {
+      "import": "./dist/utils/index.js"
     },
-    "devDependencies": {
-        "@happy-dom/global-registrator": "^15.7.4",
-        "@types/bun": "^1.1.6",
-        "tsup": "^8.2.4",
-        "@types/react": "^18.3.5",
-        "typescript": "^5.0.0"
+    "./view": {
+      "import": "./dist/view/index.js"
     },
-    "peerDependencies": {
-        "preact": "^10.23.1",
-        "react": "^18.3.1",
-        "htm": "^3.1.1"
+    "./view-legacy/html": {
+      "import": "./dist/view-legacy/html.js"
+    },
+    "./view-legacy": {
+      "import": "./dist/view-legacy/index.js"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elucidata/pulse.git"
+  },
+  "scripts": {
+    "dist:tsup": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --minify --external react  && bun run stats",
+    "dist": "rm -rf dist && tsc && bun run stats",
+    "dist:dev": "rm -rf dist && tsup ./src/index.ts ./src/utils/index.ts ./src/react/index.ts ./src/view/index.ts ./src/view/html.ts --dts --format esm --external react  --no-splitting  && bun run stats",
+    "prompt": "bun run ./tools/prompt.ts",
+    "stats": "bun run ./tools/stats.ts",
+    "stats:old": "echo \"all gzipped:\" && bun run stats:all",
+    "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils/index.js dist/react/index.js dist/view/index.js dist/view/html.js | wc -c | numfmt --to=si",
+    "prepublish": "bun run dist",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^15.7.4",
+    "@types/bun": "^1.1.6",
+    "tsup": "^8.2.4",
+    "@types/react": "^18.3.5",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "preact": "^10.23.1",
+    "react": "^18.3.1",
+    "htm": "^3.1.1"
+  }
 }
