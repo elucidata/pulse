@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it } from "bun:test"
-import { signal } from "../internals"
 import {
+  signal,
   View,
   activeRoots,
+  each,
   getEnv,
   live,
+  onDispose,
   render,
   setEnv,
   tags,
   text,
   view,
   when,
-  onDispose,
+  setVerbose,
 } from "./index"
 
 export const getHTML = (node: Node | Node[]) => {
@@ -557,5 +559,43 @@ describe("View", () => {
     expect(document.body.innerHTML).toContain("Hello")
     expect(document.body.innerHTML).toContain("test")
     remove()
+  })
+
+  it("should support array iteration with `each` block", () => {
+    setVerbose(true)
+    const obj = (name: string) => ({
+      name,
+      id: Math.random().toString(36).slice(2),
+    })
+    const items = signal([obj("one"), obj("two"), obj("three")])
+
+    const MyComponent = view(() => {
+      tags.div({ class: "List" }, () => {
+        each(items, (item) => {
+          tags.div({ class: "Item" }, () => item.name)
+        })
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    const remove = render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("one")
+    expect(document.body.innerHTML).toContain("two")
+    expect(document.body.innerHTML).toContain("three")
+
+    items.set([items.peek()[2], obj("four"), obj("five"), obj("six")])
+
+    expect(document.body.innerHTML).toContain("three")
+    expect(document.body.innerHTML).toContain("four")
+    expect(document.body.innerHTML).toContain("five")
+    expect(document.body.innerHTML).toContain("six")
+    expect(document.body.innerHTML).not.toContain("one")
+    expect(document.body.innerHTML).not.toContain("two")
+
+    // console.log(document.body.innerHTML)
+
+    remove()
+    setVerbose(false)
   })
 })

@@ -26,6 +26,17 @@ export interface ReadonlySignal<T> {
   subscribe(run: (value: T) => void): () => void
 }
 
+export interface ISignal<T> {
+  readonly value: T
+  get(): T
+  peek(): T
+  subscribe(run: (value: T) => void): () => void
+}
+export interface IMutableSignal<T> extends ISignal<T> {
+  set(newValue: T): void
+  update(updater: (value: T) => T): void
+}
+
 /**
  * *Use the `signal` function to create a new signal.*
  *
@@ -409,6 +420,19 @@ export function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
     "subscribe" in signal
   )
 }
+
+// export function isSignal<T>(signal: any): signal is ISignal<T> {
+//   return (
+//     typeof signal === "object" &&
+//     signal !== null &&
+//     "get" in signal &&
+//     "peek" in signal &&
+//     "subscribe" in signal
+//   )
+// }
+// export function isMutableSignal<T>(signal: any): signal is IMutableSignal<T> {
+//   return isSignal(signal) && "set" in signal && "update" in signal
+// }
 
 type EventCallback<T> = (detail: T) => void
 

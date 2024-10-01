@@ -1,14 +1,14 @@
 import {
+  config,
   effect,
   isReadonlySignal,
   ReadonlySignal,
   Signal,
   untracked,
-  config,
 } from "../internals"
 import { applyStylesToDOM } from "./css"
 
-export * from "../index"
+export * from "../internals"
 
 interface ViewFactory<P> {
   (): View<P>
@@ -461,6 +461,171 @@ export function raw(html: string) {
   View.appendToActiveElement(
     document.createRange().createContextualFragment(html)
   )
+}
+
+type KeyedView<T> = {
+  key: any
+  view: View<any>
+}
+
+/**
+ * Iterates over an array or signal containing an array, rendering views for each item.
+ *
+ * @param list - An array or signal containing an array of items.
+ * @param itemBuilder - A function that receives each item and index, and builds the view.
+ * @param options - Optional configuration, including a key extractor function.
+ */
+export function each<T>(
+  list: T[] | ReadonlySignal<T[]>,
+  itemBuilder: (item: T, index: number) => void,
+  keyExtractor?: (item: T, index: number) => any //= (item, index) => index
+  // options: { key?: (item: T, index: number) => any } = {}
+) {
+  const id = Math.random().toString(36).slice(2)
+  const parentView = View.active
+  const parentElement = View.activeElement
+
+  // Create comment markers to denote the each block
+  const startMarker = document.createComment(`each:${id}`)
+  const endMarker = document.createComment(`/each:${id}`)
+
+  // Insert markers into the DOM
+  if (parentElement) {
+    parentElement.appendChild(startMarker)
+    parentElement.appendChild(endMarker)
+  } else if (parentView) {
+    parentView.dom.appendChild(startMarker)
+    parentView.dom.appendChild(endMarker)
+  } else {
+    config.verbose &&
+      console.warn("each(): No active component or view to append markers")
+    return
+  }
+
+  let keyedViews = new Map<any, KeyedView<T>>()
+  let hasError = false
+  let hasWarnedAboutKeyExtractor = false
+  let boundary = new View(() => {}, [])
+
+  const disposeEffect = effect(
+    () => {
+      if (hasError) {
+        try {
+          removeBetweenMarkers(startMarker, endMarker)
+          hasError = false
+        } catch (error) {
+          config.verbose &&
+            console.error("Error removing 'each' error content:", error)
+        }
+      }
+
+      // Get the current list value
+      let currentList: T[]
+      if (isReadonlySignal(list)) {
+        currentList = list.value
+      } else {
+        currentList = list
+      }
+      if (!Array.isArray(currentList)) {
+        config.verbose &&
+          console.error("each(): Provided list is not an array", currentList)
+        currentList = []
+      }
+
+      // Prepare new map of keyed views
+      const newKeyedViews = new Map<any, KeyedView<T>>()
+      const fragment = document.createDocumentFragment()
+
+      // Generate views for each item
+      currentList.forEach((item, index) => {
+        // Generate a key for the item
+        let key: any = index // Default key is the index
+        if (typeof keyExtractor === "function") {
+          key = keyExtractor(item, index)
+          if (!key) {
+            key = index
+            config.verbose && console.warn("Key extractor returned falsy value")
+          }
+        } else if ((item as any).id !== undefined) {
+          key = (item as any).id
+        } else if (typeof item === "string" || typeof item === "number") {
+          key = index + ":" + item
+        }
+
+        if (config.verbose && key === index && !hasWarnedAboutKeyExtractor) {
+          console.warn(
+            "Using index as key for each item. Consider providing a keyExtractor function."
+          )
+          hasWarnedAboutKeyExtractor = true
+        }
+
+        let keyedView = keyedViews.get(key)
+
+        if (!keyedView) {
+          // Save current active view and element
+          const prevActiveView = View.active
+          const prevActiveElement = View.activeElement
+
+          // Set active view and element to the each container
+          View.active = boundary
+          View.activeElement = boundary.dom
+
+          try {
+            const subview = new View(() => {}, [])
+
+            // Build the view for the item
+            View.active = subview
+            View.activeElement = subview.dom
+            itemBuilder(item, index)
+
+            keyedView = { key, view: subview }
+          } finally {
+            // Restore previous active view and element
+            View.active = prevActiveView
+            View.activeElement = prevActiveElement
+          }
+        } else {
+          // If necessary, update existing view
+          // Optionally, pass `item` to the existing view for updates
+        }
+
+        newKeyedViews.set(key, keyedView)
+        const clone = keyedView.view.dom.cloneNode(true)
+        fragment.appendChild(clone)
+        // fragment.appendChild(keyedView.view.dom)
+      })
+
+      // Remove views that are no longer needed
+      keyedViews.forEach((keyedView, key) => {
+        if (!newKeyedViews.has(key)) {
+          keyedView.view.dispose()
+        }
+      })
+
+      keyedViews = newKeyedViews
+
+      // Insert the generated content into the DOM
+      removeBetweenMarkers(startMarker, endMarker)
+      insertBetweenMarkers(fragment, startMarker, endMarker)
+    },
+    (error) => {
+      config.verbose && console.error("Error in 'each' effect:", error)
+      removeBetweenMarkers(startMarker, endMarker)
+      displayError(startMarker, endMarker, error)
+      hasError = true
+    }
+  )
+
+  // Cleanup when the parent view is disposed
+  if (parentView) {
+    parentView.hooks.onDispose(() => {
+      disposeEffect()
+      keyedViews.forEach((keyedView) => {
+        keyedView.view.dispose()
+      })
+      keyedViews.clear()
+    })
+  }
 }
 
 /**
