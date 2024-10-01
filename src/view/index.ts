@@ -161,6 +161,13 @@ export class View<P> {
       View.appendToActiveView(child)
     }
   }
+  static appendToActiveElements(...children: Node[]) {
+    if (View.activeElement) {
+      children.forEach((child) => View.activeElement!.appendChild(child))
+    } else {
+      children.forEach((child) => View.appendToActiveView(child))
+    }
+  }
   static inNestedElement<T>(el: Node, fn: () => T): T {
     const prevActive = View.activeElement
     View.activeElement = el
@@ -441,17 +448,38 @@ export function live(builder: () => void) {
   })
 }
 
+function renderMarkers(id: string) {
+  const startMarker = document.createComment(id)
+  const endMarker = document.createComment(`/${id}`)
+  return { startMarker, endMarker }
+}
+
 /**
  * Renders an value as text.
  * @param value The value to display
  */
 export function text(value: string | number | ReadonlySignal<any>) {
   if (isReadonlySignal(value)) {
+    const id = Math.random().toString(36).slice(2)
+    const { startMarker, endMarker } = renderMarkers(`text:${id}`)
+
+    View.appendToActiveElements(startMarker, endMarker)
     const disposeLiveText = effect(() => {
       const textValue = value.value
-      View.appendToActiveElement(document.createTextNode(String(textValue)))
+      removeBetweenMarkers(startMarker, endMarker)
+      insertBetweenMarkers(
+        document.createTextNode(String(textValue)),
+        startMarker,
+        endMarker
+      )
+      // textNode.replaceWith(document.createTextNode(String(textValue)))
+      // textNode.textContent = String(textValue)
+      // View.appendToActiveElement(document.createTextNode(String(textValue)))
     })
-    View.active?.hooks.onDispose(disposeLiveText)
+    View.active?.hooks.onDispose(() => {
+      disposeLiveText()
+      removeBetweenMarkers(startMarker, endMarker)
+    })
     return
   }
   View.appendToActiveElement(document.createTextNode(String(value)))
@@ -478,8 +506,7 @@ type KeyedView<T> = {
 export function each<T>(
   list: T[] | ReadonlySignal<T[]>,
   itemBuilder: (item: T, index: number) => void,
-  keyExtractor?: (item: T, index: number) => any //= (item, index) => index
-  // options: { key?: (item: T, index: number) => any } = {}
+  keyExtractor?: (item: T, index: number) => any
 ) {
   const id = Math.random().toString(36).slice(2)
   const parentView = View.active
@@ -584,15 +611,11 @@ export function each<T>(
             View.active = prevActiveView
             View.activeElement = prevActiveElement
           }
-        } else {
-          // If necessary, update existing view
-          // Optionally, pass `item` to the existing view for updates
-        }
+        } // else a view already exists for this key, no need to rebuild
 
         newKeyedViews.set(key, keyedView)
         const clone = keyedView.view.dom.cloneNode(true)
         fragment.appendChild(clone)
-        // fragment.appendChild(keyedView.view.dom)
       })
 
       // Remove views that are no longer needed

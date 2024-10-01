@@ -125,7 +125,7 @@ describe("View", () => {
     expect(getHTML(output.dom)).toEqual(
       '<div>One</div><div>Two</div><div>Three</div><div class="done">Four</div><div>Five</div>Six<div></div>'
     )
-    console.log(getHTML(output.dom))
+    // console.log(getHTML(output.dom))
   })
 
   it("Should render nested HTML elements", () => {
@@ -163,6 +163,23 @@ describe("View", () => {
 
     expect(output).toBeInstanceOf(View)
     expect(getHTML(output.dom)).toEqual("<div>Parent: <span>Child</span></div>")
+  })
+
+  it("Should render components with text from signals", () => {
+    const name = signal("John")
+    const MyComponent = view(() => {
+      tags.div({}, () => {
+        text(name)
+      })
+    })
+    const remove = render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("John")
+
+    name.set("Jane")
+    expect(document.body.innerHTML).toContain("Jane")
+
+    remove()
+    expect(document.body.innerHTML).toEqual("")
   })
 
   it("Should render components with props", () => {
