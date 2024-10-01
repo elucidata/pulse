@@ -35,8 +35,9 @@ type ElementBuilder<P> = {
   (): ViewOutput<P>
 }
 
+const NOOP = () => {}
 const EMPTY_PROPS = {}
-const EMPTY_CHILDREN: Children = () => {}
+const EMPTY_CHILDREN: Children = NOOP
 
 export const activeRoots = new Set<View<any>>()
 
@@ -85,12 +86,9 @@ export class View<P> {
 
     const [props, children] = extractPropsAndChildren<P>(args)
 
-    View.active = this
-    const prevActiveView = View.activeElement
-    View.activeElement = this.dom
-    this._builder(props, children, this.hooks)
-    View.active = this.parent
-    View.activeElement = prevActiveView
+    View.inRenderContext(this, this.dom, () => {
+      this._builder(props, children, this.hooks)
+    })
 
     if (View.activeElement) {
       View.activeElement.appendChild(this.dom)
@@ -105,6 +103,7 @@ export class View<P> {
     }
     return this.env.get(key) as T
   }
+
   setEnv(key: string, value: any) {
     if (!this.env) {
       if (!!this.parent) {
@@ -176,6 +175,27 @@ export class View<P> {
     return result
   }
 
+  static inRenderContext<T>(
+    newView = View.active,
+    newElement = View.activeElement,
+    fn: () => T
+  ) {
+    const prevView = View.active
+    const prevElement = View.activeElement
+    try {
+      View.active = newView
+      View.activeElement = newElement
+      const result = fn()
+      return result
+    } catch (error) {
+      config.verbose && console.error("Error in render context:", error)
+      throw error
+    } finally {
+      View.active = prevView
+      View.activeElement = prevElement
+    }
+  }
+
   static create = Object.assign(
     function instantiate(builder: DomBuilder, ...args: any[]) {
       const instance = new View(builder, args)
@@ -188,6 +208,10 @@ export class View<P> {
       },
     }
   )
+
+  static createBoundary(parent = View.active, element = View.activeElement) {
+    return View.inRenderContext(parent, element, () => View.create(NOOP))
+  }
 }
 
 /**
@@ -245,13 +269,11 @@ export function when(
   thenBuilder: () => void,
   elseBuilder?: () => void
 ) {
-  const id = Math.random().toString(36).slice(2)
+  const id = uid()
   const activeView = View.active
   const activeElement = View.activeElement
 
-  // Create comment markers to denote the conditional block
-  const startMarker = document.createComment(`when:${id}`)
-  const endMarker = document.createComment(`/when:${id}`)
+  const { startMarker, endMarker } = createRenderMarkers(`when:${id}`)
   if (activeElement) {
     activeElement.appendChild(startMarker)
     activeElement.appendChild(endMarker)
@@ -264,7 +286,6 @@ export function when(
     return
   }
 
-  // Create a container to hold the conditionally rendered content
   let container: DocumentFragment | null = null
   let hasError = false
   let boundary: View<any>
@@ -274,21 +295,12 @@ export function when(
     fn: () => T
   ) => {
     if (!!boundary) boundary.dispose()
-    const prevView = View.active
-    const prevElement = View.activeElement
-    View.active = activeView
-    View.activeElement = container //activeView
-    boundary = View.create(() => {}, [])
-    View.active = boundary
-    const result = fn()
-    View.active = prevView
-    View.activeElement = prevElement
-    return result
+    boundary = View.createBoundary(activeView, container)
+    return View.inRenderContext(boundary, View.activeElement, fn)
   }
 
   effect(
     () => {
-      // try {
       let runThenBuilder: boolean | ReadonlySignal<boolean> = false
       if (isReadonlySignal(condition)) {
         runThenBuilder = condition.value
@@ -322,20 +334,17 @@ export function when(
       }
 
       container = document.createDocumentFragment()
-      const prevActive = View.active
-      const prevView = View.activeElement
 
       try {
-        View.activeElement = container
-        View.active = null // or set to an appropriate value if needed
-
-        untracked(() => {
-          withinBoundary(container, () => {
-            if (runThenBuilder) {
-              thenBuilder()
-            } else if (elseBuilder) {
-              elseBuilder()
-            }
+        View.inRenderContext(null, container, () => {
+          untracked(() => {
+            withinBoundary(container, () => {
+              if (runThenBuilder) {
+                thenBuilder()
+              } else if (elseBuilder) {
+                elseBuilder()
+              }
+            })
           })
         })
 
@@ -346,9 +355,6 @@ export function when(
         displayError(startMarker, endMarker, error)
         container = null
         hasError = true
-      } finally {
-        View.activeElement = prevView
-        View.active = prevActive
       }
     },
     (err) => {
@@ -368,15 +374,11 @@ export function when(
  * @returns void
  */
 export function live(builder: () => void) {
-  const id = Math.random().toString(36).slice(2)
+  const id = uid()
   const activeView = View.active
   const activeElement = View.activeElement
 
-  // Create comment markers to denote the conditional block
-  const startMarker = document.createComment(`live:${id}`)
-  const endMarker = document.createComment(`/live:${id}`)
-
-  // Insert markers into the DOM
+  const { startMarker, endMarker } = createRenderMarkers(`live:${id}`)
   if (activeElement) {
     activeElement.appendChild(startMarker)
     activeElement.appendChild(endMarker)
@@ -389,10 +391,9 @@ export function live(builder: () => void) {
     return
   }
 
-  // Create a container to hold the conditionally rendered content
   let container: DocumentFragment | null = null
   let hasError = false
-  let boundary = new View(() => {}, [])
+  let boundary = View.createBoundary()
 
   effect(() => {
     if (hasError) {
@@ -415,43 +416,21 @@ export function live(builder: () => void) {
 
     if (!!boundary) {
       boundary.dispose()
-      const prevComponent = View.active
-      const prevView = View.activeElement
-      View.active = activeView
-      View.activeElement = activeElement
-      boundary = new View(() => {}, [])
-      View.active = prevComponent
-      View.activeElement = prevView
+      boundary = View.createBoundary(activeView, activeElement)
     }
 
     container = document.createDocumentFragment()
 
     try {
-      const prevComponent = View.active
-      const prevView = View.activeElement
-      View.activeElement = container
-      // Component.active = null
-      View.active = boundary
-
-      builder()
-
-      View.activeElement = prevView
-      View.active = prevComponent
+      View.inRenderContext(boundary, container, builder)
 
       insertBetweenMarkers(container, startMarker, endMarker)
     } catch (error) {
       config.verbose && console.warn("Error in 'live' builder:", error)
       displayError(startMarker, endMarker, error)
-      // container = null
       hasError = true
     }
   })
-}
-
-function renderMarkers(id: string) {
-  const startMarker = document.createComment(id)
-  const endMarker = document.createComment(`/${id}`)
-  return { startMarker, endMarker }
 }
 
 /**
@@ -460,8 +439,8 @@ function renderMarkers(id: string) {
  */
 export function text(value: string | number | ReadonlySignal<any>) {
   if (isReadonlySignal(value)) {
-    const id = Math.random().toString(36).slice(2)
-    const { startMarker, endMarker } = renderMarkers(`text:${id}`)
+    const id = uid()
+    const { startMarker, endMarker } = createRenderMarkers(`text:${id}`)
 
     View.appendToActiveElements(startMarker, endMarker)
     const disposeLiveText = effect(() => {
@@ -472,9 +451,6 @@ export function text(value: string | number | ReadonlySignal<any>) {
         startMarker,
         endMarker
       )
-      // textNode.replaceWith(document.createTextNode(String(textValue)))
-      // textNode.textContent = String(textValue)
-      // View.appendToActiveElement(document.createTextNode(String(textValue)))
     })
     View.active?.hooks.onDispose(() => {
       disposeLiveText()
@@ -508,15 +484,11 @@ export function each<T>(
   itemBuilder: (item: T, index: number) => void,
   keyExtractor?: (item: T, index: number) => any
 ) {
-  const id = Math.random().toString(36).slice(2)
+  const id = uid()
   const parentView = View.active
   const parentElement = View.activeElement
 
-  // Create comment markers to denote the each block
-  const startMarker = document.createComment(`each:${id}`)
-  const endMarker = document.createComment(`/each:${id}`)
-
-  // Insert markers into the DOM
+  const { startMarker, endMarker } = createRenderMarkers(`each:${id}`)
   if (parentElement) {
     parentElement.appendChild(startMarker)
     parentElement.appendChild(endMarker)
@@ -532,7 +504,7 @@ export function each<T>(
   let keyedViews = new Map<any, KeyedView<T>>()
   let hasError = false
   let hasWarnedAboutKeyExtractor = false
-  let boundary = new View(() => {}, [])
+  let boundary = View.createBoundary()
 
   const disposeEffect = effect(
     () => {
@@ -546,7 +518,6 @@ export function each<T>(
         }
       }
 
-      // Get the current list value
       let currentList: T[]
       if (isReadonlySignal(list)) {
         currentList = list.value
@@ -559,13 +530,10 @@ export function each<T>(
         currentList = []
       }
 
-      // Prepare new map of keyed views
       const newKeyedViews = new Map<any, KeyedView<T>>()
       const fragment = document.createDocumentFragment()
 
-      // Generate views for each item
       currentList.forEach((item, index) => {
-        // Generate a key for the item
         let key: any = index // Default key is the index
         if (typeof keyExtractor === "function") {
           key = keyExtractor(item, index)
@@ -589,28 +557,12 @@ export function each<T>(
         let keyedView = keyedViews.get(key)
 
         if (!keyedView) {
-          // Save current active view and element
-          const prevActiveView = View.active
-          const prevActiveElement = View.activeElement
-
-          // Set active view and element to the each container
-          View.active = boundary
-          View.activeElement = boundary.dom
-
-          try {
-            const subview = new View(() => {}, [])
-
-            // Build the view for the item
-            View.active = subview
-            View.activeElement = subview.dom
+          const subview = View.createBoundary(boundary, boundary.dom)
+          View.inRenderContext(subview, subview.dom, () =>
             itemBuilder(item, index)
+          )
 
-            keyedView = { key, view: subview }
-          } finally {
-            // Restore previous active view and element
-            View.active = prevActiveView
-            View.activeElement = prevActiveElement
-          }
+          keyedView = { key, view: subview }
         } // else a view already exists for this key, no need to rebuild
 
         newKeyedViews.set(key, keyedView)
@@ -618,7 +570,6 @@ export function each<T>(
         fragment.appendChild(clone)
       })
 
-      // Remove views that are no longer needed
       keyedViews.forEach((keyedView, key) => {
         if (!newKeyedViews.has(key)) {
           keyedView.view.dispose()
@@ -627,7 +578,6 @@ export function each<T>(
 
       keyedViews = newKeyedViews
 
-      // Insert the generated content into the DOM
       removeBetweenMarkers(startMarker, endMarker)
       insertBetweenMarkers(fragment, startMarker, endMarker)
     },
@@ -639,7 +589,6 @@ export function each<T>(
     }
   )
 
-  // Cleanup when the parent view is disposed
   if (parentView) {
     parentView.hooks.onDispose(() => {
       disposeEffect()
@@ -679,8 +628,8 @@ export const tags: {
  * @returns A function that can be called to dispose of the view
  */
 export function render(viewInstance: View<any>, target: HTMLElement) {
-  const startMarker = document.createComment("pulse")
-  const endMarker = document.createComment("/pulse")
+  const id = uid()
+  const { startMarker, endMarker } = createRenderMarkers(`pulse:${id}`)
 
   activeRoots.add(viewInstance)
 
@@ -804,6 +753,12 @@ function extractPropsAndChildren<P>(args: any[]): [P, Children] {
   }
 }
 
+function createRenderMarkers(id: string) {
+  const startMarker = document.createComment(id)
+  const endMarker = document.createComment(`/${id}`)
+  return { startMarker, endMarker }
+}
+
 function insertBetweenMarkers(node: Node, start: Comment, end: Comment) {
   if (end.parentNode) {
     end.parentNode.insertBefore(node, end)
@@ -833,4 +788,8 @@ function displayError(startMarker: Comment, endMarker: Comment, error: any) {
   }`
 
   insertBetweenMarkers(errorMessage, startMarker, endMarker)
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2)
 }
