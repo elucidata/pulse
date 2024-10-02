@@ -256,14 +256,16 @@ export class ComputedSignal<T> implements ISignal<T> {
 
   private _signal: Signal<T>
   private _isEvaluated: boolean = false
+  private parentComputation: Computation | null = null
   cleanup?: () => void
 
   constructor(
     protected fn: () => T,
     protected onError?: EffectErrorFunction,
-    protected lazy = false
+    protected lazy = true
   ) {
     this._signal = new Signal<T>(undefined as any)
+    this.parentComputation = Computation.current
     if (!lazy) {
       this._evaluate()
     }
@@ -290,9 +292,19 @@ export class ComputedSignal<T> implements ISignal<T> {
 
   private _evaluate() {
     if (this._isEvaluated) return
-    this.cleanup = effect(() => {
-      this._signal.value = this.fn()
-    }, this.onError)
+    // This is basically the same as `effect()`, but it injects
+    // a specific computation as the parent computation.
+    const computation = new Computation(
+      () => {
+        this._signal.value = this.fn()
+      },
+      this.parentComputation,
+      this.onError
+    )
+    if (this.parentComputation) {
+      this.parentComputation.childComputations.add(computation)
+    }
+    this.cleanup = () => computation.cleanup()
     this._isEvaluated = true
   }
 }
@@ -371,6 +383,7 @@ export function untracked(fn: () => void) {
  *
  * @param fn - The function to derive the value of the computed signal.
  * @param onError - Optional callback to handle errors that occur during the computation.
+ * @param type - The type of the computed signal. "eager" will compute the value immediately, "lazy" will compute the value on first access. Default: "lazy"
  * @returns A new computed signal.
  *
  * @usage
@@ -385,23 +398,11 @@ export function untracked(fn: () => void) {
  */
 export function computed<T>(
   fn: () => T,
-  onError?: (error: any) => void
+  onError?: (error: any) => void,
+  type: "eager" | "lazy" = "lazy"
 ): ISignal<T> {
   //& { invalidate: () => void } {
-  return new ComputedSignal(fn, onError, false)
-}
-
-/**
- * Creates a new lazy computed signal that derives its value from the specified function, but only computes the value when first accessed.
- * @param fn - The function to derive the value of the computed signal.
- * @param onError - Optional callback to handle errors that occur during the computation.
- * @returns A new computed signal.
- */
-export function computedLazy<T>(
-  fn: () => T,
-  onError?: (error: any) => void
-): ISignal<T> {
-  return new ComputedSignal(fn, onError, true)
+  return new ComputedSignal(fn, onError, type === "lazy")
 }
 
 /**

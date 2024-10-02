@@ -1,11 +1,16 @@
 {
   "name": "@elucidata/pulse",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Microscopic signals with automatic dependency tracking.",
   "module": "dist/index.js",
   "type": "module",
   "main": "dist/index.js",
-  "author": "Matthew Mccray",
+  "author": "Matthew McCray",
+  "maintainers": [
+    {
+      "name": "Matthew McCray"
+    }
+  ],
   "license": "MIT",
   "exports": {
     ".": {

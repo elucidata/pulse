@@ -3,7 +3,6 @@ import {
   Signal,
   batch,
   computed,
-  computedLazy,
   config,
   effect,
   event,
@@ -774,7 +773,7 @@ describe("Signal Subscribe Method", () => {
   it("should support lazily compute computed signals", () => {
     let computationRunCount = 0
     const sig = signal(2)
-    const computedSignal = computedLazy(() => {
+    const computedSignal = computed(() => {
       computationRunCount++
       return sig.value * 3
     })

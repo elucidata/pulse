@@ -13,7 +13,7 @@ At its core, it's a simple API:
 ```ts
 function signal<T>(value: T): IMutableSignal<T>;
 function effect(fn: EffectFunction, onError?: ErrorCallback): CleanupFunction;
-function computed<T>(fn: () => T): ISignal<T>;
+function computed<T>(fn: () => T, onError?: ErrorCallback, type?: 'eager' | 'lazy'): ISignal<T>; // default is "lazy"
 function batch(fn: () => void): void;
 
 type EffectFunction = () => void | (() => void);
