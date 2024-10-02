@@ -254,7 +254,7 @@ describe("View", () => {
   it("Should support designed elements", () => {
     const Warning = tags.div.design.css`
       color: red;
-    `
+    ` // ``
     const MyComponent = view(() => {
       tags.div({ class: "test" }, () => {
         Warning(() => text("Hello"))
@@ -264,7 +264,7 @@ describe("View", () => {
     expect(MyComponent).toBeDefined()
 
     render(MyComponent(), document.body)
-    console.log(document.body.innerHTML)
+    // console.log(document.body.innerHTML)
     expect(document.body.innerHTML).toContain("Hello")
     expect(document.body.innerHTML).toContain("test")
     expect(document.body.innerHTML).toContain("css-")
@@ -273,10 +273,10 @@ describe("View", () => {
   it("Should designed elements that are designable", () => {
     const Message = tags.div.design.css`
       padding: 1rem;
-    `
+    ` // ``
     const Warning = Message.design.css`
       color: red;
-    `
+    ` // ``
     const MyComponent = view(() => {
       tags.div({ class: "test" }, () => {
         Warning(() => text("Hello"))
@@ -286,7 +286,7 @@ describe("View", () => {
     expect(MyComponent).toBeDefined()
 
     render(MyComponent(), document.body)
-    console.log(document.body.innerHTML)
+    // console.log(document.body.innerHTML)
     expect(document.body.innerHTML).toContain("Hello")
     expect(document.body.innerHTML).toContain("test")
     expect(document.body.innerHTML).toContain("css-")
@@ -296,7 +296,7 @@ describe("View", () => {
   it("Should support designed elements with alt syntax", () => {
     const Warning = tags.div.design.css(/* css */ `
       color: red;
-    `)
+    `) // `
     const MyComponent = view(() => {
       tags.div({ class: "test" }, () => {
         Warning(() => text("Hello"))
@@ -306,7 +306,7 @@ describe("View", () => {
     expect(MyComponent).toBeDefined()
 
     render(MyComponent(), document.body)
-    console.log(document.body.innerHTML)
+    // console.log(document.body.innerHTML)
     expect(document.body.innerHTML).toContain("Hello")
     expect(document.body.innerHTML).toContain("test")
     expect(document.body.innerHTML).toContain("css-")
@@ -494,6 +494,23 @@ describe("View", () => {
     expect(document.body.innerHTML).toContain("Fine")
     expect(document.body.innerHTML).not.toContain("Error")
 
+    dispose()
+    expect(document.body.innerHTML).toEqual("")
+  })
+
+  it("Should be resilent to errors in the top-level block", () => {
+    const MyComponent = view(() => {
+      tags.div("Before")
+      throw new Error("Error in top-level block")
+      tags.div("After")
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    const dispose = render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("Error")
+    expect(document.body.innerHTML).not.toContain("Before")
+    expect(document.body.innerHTML).not.toContain("After")
     dispose()
     expect(document.body.innerHTML).toEqual("")
   })

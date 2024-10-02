@@ -757,8 +757,6 @@ describe("Signal Subscribe Method", () => {
 
     let subscriberValue = 0
 
-    sig.value = 3
-
     const unsubscribe = computedSignal.subscribe((value) => {
       subscriberValue = value
     })

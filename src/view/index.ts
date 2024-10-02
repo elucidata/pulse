@@ -70,9 +70,11 @@ export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
 }
 
 export class View<P> {
+  readonly id = uid()
   readonly dom: DocumentFragment
   readonly parent: View<any> | null = null
   readonly children: Set<View<any>> = new Set()
+  readonly props: P
 
   env?: Map<string, any>
 
@@ -82,17 +84,39 @@ export class View<P> {
       this.parent.children.add(this)
     }
     this.dom = document.createDocumentFragment()
-
     const [props, children] = extractPropsAndChildren<P>(args)
+    this.props = props
 
-    View.inRenderContext(this, this.dom, () => {
-      this._builder(props, children, this.hooks)
-    })
+    try {
+      View.inRenderContext(this, this.dom, () => {
+        this._builder(props, children, this.hooks)
+      })
 
-    if (View.activeElement) {
-      View.activeElement.appendChild(this.dom)
-    } else if (this.parent) {
-      this.parent.dom.appendChild(this.dom)
+      if (View.activeElement) {
+        View.activeElement.appendChild(this.dom)
+      } else if (this.parent) {
+        this.parent.dom.appendChild(this.dom)
+      }
+    } catch (error) {
+      config.verbose && console.error("Error in View builder:", error)
+      const { startMarker, endMarker } = createRenderMarkers(`view:${this.id}`)
+
+      // clear the dom
+      this.dom = document.createDocumentFragment()
+
+      if (View.activeElement) {
+        View.activeElement.appendChild(startMarker)
+        View.activeElement.appendChild(endMarker)
+      } else if (this.parent) {
+        this.parent.dom.appendChild(startMarker)
+        this.parent.dom.appendChild(endMarker)
+      } else {
+        this.dom.appendChild(startMarker)
+        this.dom.appendChild(endMarker)
+      }
+
+      // Display error message between markers
+      displayError(startMarker!, endMarker!, error)
     }
   }
 

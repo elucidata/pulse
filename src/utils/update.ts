@@ -1,4 +1,4 @@
-import { Signal } from "../internals"
+import { IMutableSignal } from "../internals"
 
 export type Updater<T> = Required<T> | ((v: T) => T)
 export type Merger<T> = Partial<T> | ((v: T) => Partial<T>)
@@ -11,7 +11,7 @@ export type Merger<T> = Partial<T> | ((v: T) => Partial<T>)
  *
  */
 export function update<T>(
-  state: Signal<T>,
+  state: IMutableSignal<T>,
   updater: Updater<T> | Merger<T>,
   reportChanges = false
 ): void | (keyof T)[] {
