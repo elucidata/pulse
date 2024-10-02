@@ -5,7 +5,7 @@ export {
   effect,
   event,
   signal,
-  isReadonlySignal,
-  ReadonlySignal,
+  isSignal,
+  ISignal,
   withIdPrefix,
 } from "./internals"

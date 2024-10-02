@@ -72,7 +72,7 @@ Conditionally renders a view based on a boolean condition.
 
 ```typescript
 function when(
-    condition: ReadonlySignal<boolean> | boolean | (() => boolean | ReadonlySignal<boolean>),
+    condition: ISignal<boolean> | boolean | (() => boolean | ISignal<boolean>),
     thenBuilder: () => void,
     elseBuilder?: () => void
 ): void

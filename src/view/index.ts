@@ -1,11 +1,4 @@
-import {
-  config,
-  effect,
-  isReadonlySignal,
-  ReadonlySignal,
-  Signal,
-  untracked,
-} from "../internals"
+import { config, effect, isSignal, ISignal, untracked } from "../internals"
 import { css as cssTemplate, applyStylesToDOM, withAutoScope } from "./css"
 
 export * from "../internals"
@@ -17,7 +10,7 @@ interface ViewFactory<P> {
   (props: P, children: Children): View<P>
   styles(css: string): ViewFactory<P>
 }
-type Children = () => void | string | number | Signal<any>
+type Children = () => void | string | number | ISignal<any>
 type ViewHooks = {
   onDispose: (callback: Function) => void
 }
@@ -268,10 +261,7 @@ export function onDispose(callback: Function) {
  * @param elseBuilder (optional) When the condition is false, this function is called to build the view, otherwise it is skipped/torn down.
  */
 export function when(
-  condition:
-    | ReadonlySignal<boolean>
-    | boolean
-    | (() => boolean | ReadonlySignal<boolean>),
+  condition: ISignal<boolean> | boolean | (() => boolean | ISignal<boolean>),
   thenBuilder: () => void,
   elseBuilder?: () => void
 ) {
@@ -307,15 +297,15 @@ export function when(
 
   effect(
     () => {
-      let runThenBuilder: boolean | ReadonlySignal<boolean> = false
-      if (isReadonlySignal(condition)) {
+      let runThenBuilder: boolean | ISignal<boolean> = false
+      if (isSignal(condition)) {
         runThenBuilder = condition.value
       } else if (typeof condition === "boolean") {
         runThenBuilder = condition
       } else {
         runThenBuilder = condition()
       }
-      if (isReadonlySignal(runThenBuilder)) {
+      if (isSignal(runThenBuilder)) {
         runThenBuilder = runThenBuilder.value
       }
 
@@ -443,8 +433,8 @@ export function live(builder: () => void) {
  * Renders an value as text.
  * @param value The value to display
  */
-export function text(value: string | number | ReadonlySignal<any>) {
-  if (isReadonlySignal(value)) {
+export function text(value: string | number | ISignal<any>) {
+  if (isSignal(value)) {
     const id = uid()
     const { startMarker, endMarker } = createRenderMarkers(`text:${id}`)
 
@@ -486,7 +476,7 @@ type KeyedView<T> = {
  * @param options - Optional configuration, including a key extractor function.
  */
 export function each<T>(
-  list: T[] | ReadonlySignal<T[]>,
+  list: T[] | ISignal<T[]>,
   itemBuilder: (item: T, index: number) => void,
   keyExtractor?: (item: T, index: number) => any
 ) {
@@ -525,7 +515,7 @@ export function each<T>(
       }
 
       let currentList: T[]
-      if (isReadonlySignal(list)) {
+      if (isSignal(list)) {
         currentList = list.value
       } else {
         currentList = list
@@ -697,7 +687,7 @@ function element(
   if (
     typeof props === "string" ||
     typeof props === "number" ||
-    isReadonlySignal(props)
+    isSignal(props)
   ) {
     children = props as any
     props = {}
@@ -740,7 +730,7 @@ function element(
     const resultType = typeof result
     if (resultType === "string" || resultType === "number") {
       el.appendChild(document.createTextNode(String(result)))
-    } else if (isReadonlySignal(result)) {
+    } else if (isSignal(result)) {
       const disposeLiveChildren = effect(() => {
         const value = result.value
         el.textContent = String(value)
@@ -753,7 +743,7 @@ function element(
 }
 
 function setElAttr(el: Element, key: string, value: any) {
-  if (isReadonlySignal(value)) {
+  if (isSignal(value)) {
     const disposeLiveAttr = effect(() => {
       el.setAttribute(key, String(value.value))
     })
@@ -763,7 +753,7 @@ function setElAttr(el: Element, key: string, value: any) {
   }
 }
 function setElProp(el: Element, key: string, value: any) {
-  if (isReadonlySignal(value)) {
+  if (isSignal(value)) {
     const disposeLiveAttr = effect(() => {
       ;(el as any)[key] = value.value
     })

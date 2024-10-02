@@ -1,7 +1,7 @@
-import { ReadonlySignal, signal } from "../internals"
+import { ISignal, signal } from "../internals"
 
-// Hot and Lazy Sync Observables with map and filter, masquerading as a ReadonlySignal
-export interface Observable<T> extends ReadonlySignal<T> {
+// Hot and Lazy Sync Observables with map and filter, masquerading as a ISignal
+export interface Observable<T> extends ISignal<T> {
   subscribe(run: (value: T) => void): () => void
   map<U>(mapFn: (value: T) => U): Observable<U>
   filter(predicate: (value: T) => boolean): Observable<T>

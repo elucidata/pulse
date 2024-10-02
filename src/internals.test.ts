@@ -1,5 +1,13 @@
 import { describe, expect, it, spyOn, mock } from "bun:test"
-import { Signal, batch, computed, config, effect, event } from "./internals"
+import {
+  Signal,
+  batch,
+  computed,
+  config,
+  effect,
+  event,
+  signal,
+} from "./internals"
 
 describe("Signals Module", () => {
   describe("Signal", () => {
@@ -744,10 +752,12 @@ describe("Signal Subscribe Method", () => {
   })
 
   it("should work with computed signals", () => {
-    const signal = new Signal(2)
-    const computedSignal = computed(() => signal.value * 3)
+    const sig = signal(2)
+    const computedSignal = computed(() => sig.value * 3)
 
     let subscriberValue = 0
+
+    sig.value = 3
 
     const unsubscribe = computedSignal.subscribe((value) => {
       subscriberValue = value
@@ -756,7 +766,7 @@ describe("Signal Subscribe Method", () => {
     // Since computed signals compute immediately, ensure the initial value is set
     expect(subscriberValue).toBe(6)
 
-    signal.value = 4
+    sig.value = 4
     expect(subscriberValue).toBe(12)
 
     unsubscribe()

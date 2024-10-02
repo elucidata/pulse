@@ -19,20 +19,22 @@ export const setVerbose = (value: boolean) => {
  *
  * @template T - The type of the value held by the signal.
  */
-export interface ReadonlySignal<T> {
-  readonly value: T
-  get(): T
-  peek(): T
-  subscribe(run: (value: T) => void): () => void
-}
-
 export interface ISignal<T> {
   readonly value: T
   get(): T
   peek(): T
   subscribe(run: (value: T) => void): () => void
 }
+
+/**
+ * Represents a mutable signal that holds a value of type `T`.
+ * Provides methods to get, set, and update the value.
+ *
+ * @template T - The type of the value held by the signal.
+ */
 export interface IMutableSignal<T> extends ISignal<T> {
+  get value(): T
+  set value(newValue: T)
   set(newValue: T): void
   update(updater: (value: T) => T): void
 }
@@ -41,12 +43,12 @@ export interface IMutableSignal<T> extends ISignal<T> {
  * *Use the `signal` function to create a new signal.*
  *
  * The `Signal` class represents a reactive value that can be observed for changes.
- * It implements the `ReadonlySignal` interface and provides methods to get, set,
+ * It implements the `IMutableSignal` interface and provides methods to get, set,
  * and update the value, as well as to subscribe to changes.
  *
  * @template T - The type of the value held by the signal.
  */
-export class Signal<T> implements ReadonlySignal<T> {
+export class Signal<T> implements IMutableSignal<T> {
   readonly id = !!idPrefix
     ? `${idPrefix}.${(lastId++).toString(36)}`
     : (lastId++).toString(36)
@@ -252,7 +254,7 @@ export class Computation {
  *
  * Represents a computed signal that derives its value from a function.
  */
-export class ComputedSignal<T> implements ReadonlySignal<T> {
+export class ComputedSignal<T> implements ISignal<T> {
   readonly id = !!idPrefix
     ? `${idPrefix}.${(lastId++).toString(36)}`
     : (lastId++).toString(36)
@@ -304,7 +306,7 @@ export class ComputedSignal<T> implements ReadonlySignal<T> {
  * mySignal.peek() // untracked value access
  * ```
  */
-export function signal<T>(value: T): Signal<T> {
+export function signal<T>(value: T): IMutableSignal<T> {
   return new Signal(value)
 }
 
@@ -373,7 +375,7 @@ export function untracked(fn: () => void) {
 export function computed<T>(
   fn: () => T,
   onError?: (error: any) => void
-): ReadonlySignal<T> {
+): ISignal<T> {
   return new ComputedSignal(fn, onError)
 }
 
@@ -406,12 +408,12 @@ export function batch(fn: () => void) {
 }
 
 /**
- * Checks if the specified signal is a readonly signal.
+ * Checks if the specified signal is a signal.
  *
  * @param signal - The signal to check.
  * @returns `true` if the signal is a readonly signal, otherwise `false`.
  */
-export function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
+export function isSignal<T>(signal: any): signal is ISignal<T> {
   return (
     typeof signal === "object" &&
     signal !== null &&
@@ -421,18 +423,14 @@ export function isReadonlySignal<T>(signal: any): signal is ReadonlySignal<T> {
   )
 }
 
-// export function isSignal<T>(signal: any): signal is ISignal<T> {
-//   return (
-//     typeof signal === "object" &&
-//     signal !== null &&
-//     "get" in signal &&
-//     "peek" in signal &&
-//     "subscribe" in signal
-//   )
-// }
-// export function isMutableSignal<T>(signal: any): signal is IMutableSignal<T> {
-//   return isSignal(signal) && "set" in signal && "update" in signal
-// }
+/**
+ * Checks if the specified signal is a mutable signal.
+ * @param signal - The signal to check.
+ * @returns `true` if the signal is a mutable signal, otherwise `false`.
+ */
+export function isMutableSignal<T>(signal: any): signal is IMutableSignal<T> {
+  return isSignal(signal) && "set" in signal && "update" in signal
+}
 
 type EventCallback<T> = (detail: T) => void
 

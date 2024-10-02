@@ -9,21 +9,22 @@ No need to worry about tracking dependencies in your computed values or effectsâ
 At its core it's a simple API:
 
 ```ts
-declare function signal<T>(value: T): Signal<T>;
-declare function effect(fn: EffectFunction): () => void;
-declare function computed<T>(fn: () => T): ReadonlySignal<T>;
-declare function batch(fn: () => void): void;
+function signal<T>(value: T): IMutableSignal<T>
+function effect(fn: EffectFunction, onError: ErrorCallback): CleanupFunction
+function computed<T>(fn: () => T): ISignal<T>
+function batch(fn: () => void): void
 
-type EffectFunction = () => void | (() => void);
+type EffectFunction = () => void | (() => void)
+type CleanupFunction = () => void
+type ErrorCallback = (error: any, source: any) => void
 
-interface ReadonlySignal<T> {
-    readonly value: T;
-    get(): T;
+interface ISignal<T> {
+    readonly value: T
+    get(): T
     peek(): T;
-    subscribe(run: (value: T) => void): () => void;
+    subscribe(run: (value: T) => void): CleanupFunction
 }
-declare class Signal<T> implements ReadonlySignal<T> {
-    constructor(value: T);
+interface IMutableSignal<T> extends ISignal<T> {
     get value(): T;
     set value(newValue: T);
     set(newValue: T): void;
@@ -154,22 +155,32 @@ Pulse View is guided by a set of high-level principles:
 ### Demo Usage
 
 ```ts
-import { view, signal, render, tags, text } from '@elucidata/pulse/view';
+import { view, signal, render, tags, text } from '@elucidata/pulse/view'
 
-const { div, button } = tags;
+const { div, button } = tags
 
-const counter = signal(0);
+const counter = signal(0)
 
 const CounterView = view(() => {
-    div(() => {
-        button({ onClick: () => counter.value++ }, 'Increment');
-        button({ onClick: () => counter.value-- }, 'Decrement');
+    Root(() => {
+        Button('Increment', () => counter.value++)
+        Button('Decrement', () => counter.value--)
+
         div(() => {
             text('Count: ')
             text(counter)
-        });
-    });
-});
+        })
+    })
+})
+
+const Root = div.design.css`
+  padding: 1rem;
+  border: 0.1rem solid dodgerblue;
+`
+
+const Button = (children, onclick) => {
+  button({ onclick }, children)
+}
 
 const dispose = render(CounterView(), document.getElementById('app'))
 ```
