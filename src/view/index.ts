@@ -650,18 +650,18 @@ export const tags: {
 
 function createElement(
   tag: string,
-  className: string = ""
+  classNames: string[] = []
 ): ElementBuilder<any> {
   return Object.assign(
     function Element(props: any, children: Children) {
-      return element(tag, props, children, className)
+      return element(tag, props, children, classNames)
     } as ElementBuilder<any>,
     {
       design: {
         css: (styles: TemplateStringsArray | string, ...args: any[]) => {
           const src = typeof styles === "string" ? [styles] : styles
           const css = withAutoScope(() => cssTemplate(src as any, ...args))
-          return createElement(tag, `${css} ${className}`.trim())
+          return createElement(tag, [css, ...classNames])
         },
       },
     }
@@ -706,7 +706,7 @@ function element(
   name: string,
   props: any = EMPTY_PROPS,
   children: Children = EMPTY_CHILDREN,
-  customClass: string = ""
+  customClasses: string[] = []
 ) {
   const el = document.createElement(name)
 
@@ -752,7 +752,8 @@ function element(
     }
   }
 
-  if (!!customClass) el.classList.add(customClass)
+  if (customClasses.length)
+    customClasses.forEach((cls) => el.classList.add(cls))
 
   View.appendToActiveElement(el)
 
