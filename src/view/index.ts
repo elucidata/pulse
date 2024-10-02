@@ -119,8 +119,7 @@ export class View<P> {
   hooks = {
     onDispose: (callback: Function) => {
       if (View.active !== this) {
-        config.verbose &&
-          console.warn("onDispose() called outside of component")
+        config.verbose && console.warn("onDispose() called outside of view")
         return
       }
       if (!this.disposeCallbacks) {
@@ -147,7 +146,7 @@ export class View<P> {
     if (View.active) {
       View.active.dom.appendChild(child)
     } else {
-      config.verbose && console.warn("No active component")
+      config.verbose && console.warn("No active view")
     }
   }
 
@@ -237,19 +236,19 @@ export function setEnv(key: string, value: any) {
   if (View.active) {
     View.active.setEnv(key, value)
   } else {
-    config.verbose && console.warn("No active component")
+    config.verbose && console.warn("No active view")
   }
 }
 
 /**
- * Registers a callback to be called when the active component is disposed.
+ * Registers a callback to be called when the active view is disposed.
  * @param callback
  */
 export function onDispose(callback: Function) {
   if (View.active) {
     View.active.hooks.onDispose(callback)
   } else {
-    config.verbose && console.warn("No active component")
+    config.verbose && console.warn("No active view")
   }
 }
 
@@ -277,8 +276,7 @@ export function when(
     activeView.dom.appendChild(startMarker)
     activeView.dom.appendChild(endMarker)
   } else {
-    config.verbose &&
-      console.warn("when(): No active component or view to append markers")
+    config.verbose && console.warn("when(): No active view to append markers")
     return
   }
 
@@ -382,8 +380,7 @@ export function live(builder: () => void) {
     activeView.dom.appendChild(startMarker)
     activeView.dom.appendChild(endMarker)
   } else {
-    config.verbose &&
-      console.warn("live(): No active component or view to append markers")
+    config.verbose && console.warn("live(): No active view to append markers")
     return
   }
 
@@ -492,8 +489,7 @@ export function each<T>(
     parentView.dom.appendChild(startMarker)
     parentView.dom.appendChild(endMarker)
   } else {
-    config.verbose &&
-      console.warn("each(): No active component or view to append markers")
+    config.verbose && console.warn("each(): No active view to append markers")
     return
   }
 
