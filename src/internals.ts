@@ -213,17 +213,12 @@ export class Computation {
     Array.from(this.childComputations).forEach((child) => {
       child.cleanup()
     })
-    // this.childComputations.clear()
-
-    // console.debug("Cleaning up", this.id, "deps.size:", this.dependencies.size)
 
     if (this._fnCleanup) {
       try {
         this._fnCleanup()
         this._fnCleanup = void 0
       } catch (error) {
-        // if (typeof error === "object")
-        //   Object.assign(error, { computation: this }) // if logged, it'd be a memory leak
         config.verbose && console.error("Cleanup Error:", error)
       }
     }
@@ -260,29 +255,45 @@ export class ComputedSignal<T> implements ISignal<T> {
     : (lastId++).toString(36)
 
   private _signal: Signal<T>
-  readonly cleanup: () => void
+  private _isEvaluated: boolean = false
+  cleanup?: () => void
 
-  constructor(fn: () => T, onError?: EffectErrorFunction) {
+  constructor(
+    protected fn: () => T,
+    protected onError?: EffectErrorFunction,
+    protected lazy = false
+  ) {
     this._signal = new Signal<T>(undefined as any)
-    this.cleanup = effect(() => {
-      this._signal.value = fn()
-    }, onError)
+    if (!lazy) {
+      this._evaluate()
+    }
   }
 
   get value(): T {
-    return this._signal.value
+    return this.get()
   }
 
   peek(): T {
+    this._evaluate()
     return this._signal.peek()
   }
 
   get() {
+    this._evaluate()
     return this._signal.get()
   }
 
   subscribe(run: (value: T) => void): () => void {
+    this._evaluate()
     return this._signal.subscribe(run)
+  }
+
+  private _evaluate() {
+    if (this._isEvaluated) return
+    this.cleanup = effect(() => {
+      this._signal.value = this.fn()
+    }, this.onError)
+    this._isEvaluated = true
   }
 }
 
@@ -334,7 +345,7 @@ export function effect(
   if (parentComputation) {
     parentComputation.childComputations.add(computation)
   }
-  return () => computation.cleanup()
+  return () => computation.cleanup?.()
 }
 
 /**
@@ -376,7 +387,21 @@ export function computed<T>(
   fn: () => T,
   onError?: (error: any) => void
 ): ISignal<T> {
-  return new ComputedSignal(fn, onError)
+  //& { invalidate: () => void } {
+  return new ComputedSignal(fn, onError, false)
+}
+
+/**
+ * Creates a new lazy computed signal that derives its value from the specified function, but only computes the value when first accessed.
+ * @param fn - The function to derive the value of the computed signal.
+ * @param onError - Optional callback to handle errors that occur during the computation.
+ * @returns A new computed signal.
+ */
+export function computedLazy<T>(
+  fn: () => T,
+  onError?: (error: any) => void
+): ISignal<T> {
+  return new ComputedSignal(fn, onError, true)
 }
 
 /**

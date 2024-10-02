@@ -3,6 +3,7 @@ import {
   Signal,
   batch,
   computed,
+  computedLazy,
   config,
   effect,
   event,
@@ -766,6 +767,32 @@ describe("Signal Subscribe Method", () => {
 
     sig.value = 4
     expect(subscriberValue).toBe(12)
+
+    unsubscribe()
+  })
+
+  it("should support lazily compute computed signals", () => {
+    let computationRunCount = 0
+    const sig = signal(2)
+    const computedSignal = computedLazy(() => {
+      computationRunCount++
+      return sig.value * 3
+    })
+
+    let subscriberValue = 0
+    expect(computationRunCount).toBe(0)
+
+    const unsubscribe = computedSignal.subscribe((value) => {
+      subscriberValue = value
+    })
+    expect(computationRunCount).toBe(1)
+
+    // Since computed signals compute immediately, ensure the initial value is set
+    expect(subscriberValue).toBe(6)
+
+    sig.value = 4
+    expect(subscriberValue).toBe(12)
+    expect(computationRunCount).toBe(2)
 
     unsubscribe()
   })

@@ -2,6 +2,7 @@ export {
   Signal,
   batch,
   computed,
+  computedLazy,
   effect,
   event,
   signal,
