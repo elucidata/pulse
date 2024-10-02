@@ -1,3 +1,5 @@
+![Min+Gzip](https://badgen.net/bundlephobia/minzip/@elucidata/pulse)
+
 # Pulse
 
 > Microscopic signals with automatic dependency tracking.
@@ -242,3 +244,4 @@ We happily review contributions from the community. To be eligible for merging i
 ## License
 
 _Pulse_ is licensed under the [MIT License](License.md).
+
