@@ -58,7 +58,7 @@ Pulse has no dependencies or prerequisites other than a JavaScript runtime. Bun 
 To install Pulse:
 
 ```
-bun install @elucidata/pulse
+bun add @elucidata/pulse
 ```
 
 ## React/Preact
@@ -132,7 +132,7 @@ Signals comply with Svelte's store contract:
 <div>{$counter}</div>
 ```
 
-## PulseView (Experimental)
+## Pulse View (Experimental)
 
 Included is a tiny experimental view engine you can play with. Feedback is welcome. Pulse View is a declarative, statement-based, reactive UI toolkit.
 
@@ -140,7 +140,7 @@ Included is a tiny experimental view engine you can play with. Feedback is welco
 - **Signal-Driven Updates**: Updates are reactions to signal values only.
 - **Reactive Sections**: Parts of a view can be reactive when denoted with `when`, `each`, or `live`.
 
-### The Tao of PulseView
+### The Tao of Pulse View
 
 Pulse View is guided by a set of high-level principles:
 
