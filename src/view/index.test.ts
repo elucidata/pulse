@@ -7,6 +7,7 @@ import {
   getEnv,
   live,
   onDispose,
+  raw,
   render,
   setEnv,
   tags,
@@ -208,6 +209,28 @@ describe("View", () => {
 
     count.set(1)
     expect(document.body.innerHTML).toContain("<div>1</div>")
+  })
+
+  it("Should support inserting raw html", () => {
+    const MyComponent = view(() => {
+      tags.div({}, () => raw("<span>Hello</span>"))
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("<span>Hello</span>")
+  })
+
+  it("Should support inserting raw html as a tagged literal", () => {
+    const MyComponent = view(() => {
+      tags.div({}, () => raw`<span>Hello ${"bob"}</span>`)
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("<span>Hello bob</span>")
   })
 
   it("Should support nested components", () => {

@@ -478,9 +478,20 @@ export function text(value: string | number | ISignal<any>) {
   View.appendToActiveElement(document.createTextNode(String(value)))
 }
 
-export function raw(html: string) {
+export function raw(html: TemplateStringsArray | string, ...args: any[]) {
+  if (typeof html === "string") {
+    View.appendToActiveElement(
+      document.createRange().createContextualFragment(html)
+    )
+    return
+  }
+  // Join the html with the args to make a single string
+  const htmlString = html.reduce(
+    (acc, str, i) => acc + str + (args[i] || ""),
+    ""
+  )
   View.appendToActiveElement(
-    document.createRange().createContextualFragment(html)
+    document.createRange().createContextualFragment(htmlString)
   )
 }
 
