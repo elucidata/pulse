@@ -1,15 +1,27 @@
 export type EffectFunction = () => void | (() => void)
 export type EffectErrorFunction = (error: any, source?: Computation) => void
 
-let idPrefix: string | null = null
-let lastId = 0
-
 export let config = {
   verbose: false,
 }
 
 export const setVerbose = (value: boolean) => {
   config.verbose = value
+}
+
+export const Ident = {
+  prefix: void 0 as string | void,
+  register: 1,
+
+  create(prefix?: string) {
+    let id = ""
+    if (Ident.prefix) id += Ident.prefix + ":"
+    if (prefix) id += prefix + ":"
+    id += (Ident.register++).toString(36)
+    if (Ident.register > Number.MAX_SAFE_INTEGER)
+      Ident.register = Number.MIN_SAFE_INTEGER
+    return id
+  },
 }
 
 /**
@@ -49,9 +61,7 @@ export interface IMutableSignal<T> extends ISignal<T> {
  * @template T - The type of the value held by the signal.
  */
 export class Signal<T> implements IMutableSignal<T> {
-  readonly id = !!idPrefix
-    ? `${idPrefix}.${(lastId++).toString(36)}`
-    : (lastId++).toString(36)
+  readonly id = Ident.create()
 
   private _value: T
   private _subscriptions = event<T>()
@@ -100,12 +110,12 @@ export class Signal<T> implements IMutableSignal<T> {
 }
 
 /**
- * Use this function to run a block of code with a specific id, which can be useful
+ * Use this function to run a block of code with a specific id prefix, which can be useful
  * for debugging and logging. It will use the specified id for the duration of the
  * block and then revert to the previous id. Any signals or computeds created within
- * the block will use the specified id.
+ * the block will use the specified id prefix.
  *
- * @param id - The id to use for the block of code.
+ * @param id - The id prefix to use for the block of code.
  * @param worker - The function to run with the specified id.
  * @template T - The return type of the worker function.
  * @returns The result of the worker function.
@@ -116,13 +126,13 @@ export class Signal<T> implements IMutableSignal<T> {
  * const authState = withIdPrefix("auth-state", () => signal("initial value"))
  * ```
  */
-export function withIdPrefix<T>(id: string, worker: () => T) {
-  const prevIdPrefix = idPrefix
-  idPrefix = id
+export function withIdPrefix<T>(id: string | void, worker: () => T) {
+  const prevIdPrefix = Ident.prefix
   try {
+    Ident.prefix = id
     return worker()
   } finally {
-    idPrefix = prevIdPrefix
+    Ident.prefix = prevIdPrefix
   }
 }
 
@@ -132,9 +142,7 @@ export function withIdPrefix<T>(id: string, worker: () => T) {
  * Represents a computation that runs an effect function and tracks its dependencies.
  */
 export class Computation {
-  readonly id = !!idPrefix
-    ? `${idPrefix}.${(lastId++).toString(36)}`
-    : (lastId++).toString(36)
+  readonly id = Ident.create()
 
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
@@ -250,9 +258,7 @@ export class Computation {
  * Represents a computed signal that derives its value from a function.
  */
 export class ComputedSignal<T> implements ISignal<T> {
-  readonly id = !!idPrefix
-    ? `${idPrefix}.${(lastId++).toString(36)}`
-    : (lastId++).toString(36)
+  readonly id = Ident.create()
 
   private _signal: Signal<T>
   private _isEvaluated: boolean = false

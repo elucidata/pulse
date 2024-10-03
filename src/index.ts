@@ -1,5 +1,5 @@
 export {
-  Signal,
+  // Signal,
   batch,
   computed,
   effect,
@@ -7,5 +7,6 @@ export {
   signal,
   isSignal,
   ISignal,
+  IMutableSignal,
   withIdPrefix,
 } from "./internals"

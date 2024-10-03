@@ -1,7 +1,20 @@
-import { config, effect, isSignal, ISignal, untracked } from "../internals"
+import {
+  config,
+  effect,
+  isSignal,
+  ISignal,
+  untracked,
+  isMutableSignal,
+  Ident,
+  withIdPrefix,
+} from "../internals"
 import { css as cssTemplate, applyStylesToDOM, withAutoScope } from "./css"
 
 export * from "../internals"
+
+const viewRegistry = new Map<string, any>()
+//@ts-ignore
+globalThis.pulseViewRegistry = viewRegistry
 
 interface ViewFactory<P> {
   (): View<P>
@@ -26,15 +39,30 @@ type Designable = {
       ...args: any[]
     ): ElementBuilder<any> & Designable
   }
+  extend(css: string): ElementBuilder<any> & Designable
+  extend(modifiers: ModifierBuilder<any>): ElementBuilder<any> & Designable
+  extend(
+    css: string,
+    modifiers: ModifierBuilder<any>
+  ): ElementBuilder<any> & Designable
 }
 type ElementBuilder<P> = {
-  (props: P, children: Children): void
-  (props: P): void
-  (children: Children): void
-  (): void
+  (props: P, children: Children): ElementModifiers
+  (props: P): ElementModifiers
+  (children: Children): ElementModifiers
+  (): ElementModifiers
 } & Designable
+type ModifierBuilder<T> = (modifiers: ElementModifiers) => T
+type ElementModifiers = {
+  element: HTMLElement
+  css: (
+    styles: TemplateStringsArray | string,
+    ...args: any[]
+  ) => ElementModifiers
+}
 
 const NOOP = () => {}
+const IDENT = <T>(input: T): T => input
 const EMPTY_PROPS = {}
 const EMPTY_CHILDREN: Children = NOOP
 
@@ -55,10 +83,14 @@ export const activeRoots = new Set<View<any>>()
  * @returns
  */
 export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
+  const idPrefix = Ident.prefix
   return Object.assign(
     function instantiate(...args: any[]) {
-      const instance = new View(builder, args)
-      return instance
+      return withIdPrefix(idPrefix, () => {
+        const instance = new View(builder, args)
+        viewRegistry.set(instance.id, instance)
+        return instance
+      })
     } as ViewFactory<P>,
     {
       styles(css: string) {
@@ -70,7 +102,7 @@ export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
 }
 
 export class View<P> {
-  readonly id = uid()
+  readonly id = Ident.create()
   readonly dom: DocumentFragment
   readonly parent: View<any> | null = null
   readonly children: Set<View<any>> = new Set()
@@ -144,7 +176,7 @@ export class View<P> {
     onDispose: (callback: Function) => {
       if (View.active !== this) {
         config.verbose && console.warn("onDispose() called outside of view")
-        return
+        // return // this breaks 'use' attributes
       }
       if (!this.disposeCallbacks) {
         this.disposeCallbacks = new Set()
@@ -288,11 +320,11 @@ export function when(
   thenBuilder: () => void,
   elseBuilder?: () => void
 ) {
-  const id = uid()
+  const id = Ident.create("when")
   const activeView = View.active
   const activeElement = View.activeElement
 
-  const { startMarker, endMarker } = createRenderMarkers(`when:${id}`)
+  const { startMarker, endMarker } = createRenderMarkers(id)
   if (activeElement) {
     activeElement.appendChild(startMarker)
     activeElement.appendChild(endMarker)
@@ -392,11 +424,11 @@ export function when(
  * @returns void
  */
 export function live(builder: () => void) {
-  const id = uid()
+  const id = Ident.create("live")
   const activeView = View.active
   const activeElement = View.activeElement
 
-  const { startMarker, endMarker } = createRenderMarkers(`live:${id}`)
+  const { startMarker, endMarker } = createRenderMarkers(id)
   if (activeElement) {
     activeElement.appendChild(startMarker)
     activeElement.appendChild(endMarker)
@@ -456,8 +488,8 @@ export function live(builder: () => void) {
  */
 export function text(value: string | number | ISignal<any>) {
   if (isSignal(value)) {
-    const id = uid()
-    const { startMarker, endMarker } = createRenderMarkers(`text:${id}`)
+    const id = Ident.create("text")
+    const { startMarker, endMarker } = createRenderMarkers(id)
 
     View.appendToActiveElements(startMarker, endMarker)
     const disposeLiveText = effect(() => {
@@ -512,11 +544,11 @@ export function each<T>(
   itemBuilder: (item: T, index: number) => void,
   keyExtractor?: (item: T, index: number) => any
 ) {
-  const id = uid()
+  const id = Ident.create("each")
   const parentView = View.active
   const parentElement = View.activeElement
 
-  const { startMarker, endMarker } = createRenderMarkers(`each:${id}`)
+  const { startMarker, endMarker } = createRenderMarkers(id)
   if (parentElement) {
     parentElement.appendChild(startMarker)
     parentElement.appendChild(endMarker)
@@ -638,7 +670,18 @@ export function each<T>(
  * ```
  */
 export const tags: {
-  [key in keyof HTMLElementTagNameMap]: ElementBuilder<any>
+  [key in keyof HTMLElementTagNameMap]: ElementBuilder<
+    Partial<Omit<HTMLElementTagNameMap[key], "style">> &
+      Partial<{
+        style: CSSStyleDeclaration | string
+        ref: (el: HTMLElement) => void
+        use: (el: HTMLElement) => void
+        key: any
+        $value: ISignal<any>
+        $checked: ISignal<boolean>
+        $selected: ISignal<boolean>
+      }>
+  >
 } = new Proxy({} as any, {
   get(target, key: any) {
     if (!(key in target)) {
@@ -650,11 +693,12 @@ export const tags: {
 
 function createElement(
   tag: string,
-  classNames: string[] = []
+  classNames: string[] = [],
+  modifiers: ModifierBuilder<any> = NOOP
 ): ElementBuilder<any> {
   return Object.assign(
     function Element(props: any, children: Children) {
-      return element(tag, props, children, classNames)
+      return element(tag, props, children, classNames, modifiers)
     } as ElementBuilder<any>,
     {
       design: {
@@ -663,6 +707,24 @@ function createElement(
           const css = withAutoScope(() => cssTemplate(src as any, ...args))
           return createElement(tag, [css, ...classNames])
         },
+      },
+      extend(cssOrModifiers: string | ModifierBuilder<any>, modifiers?: any) {
+        const cssString =
+          typeof cssOrModifiers === "string" ? [cssOrModifiers] : ""
+        const modifiersFn =
+          typeof cssOrModifiers === "function" ? cssOrModifiers : modifiers
+        let extraClasses = ""
+
+        if (!!cssString) {
+          extraClasses = withAutoScope(() => cssTemplate(cssString as any))
+        }
+
+        if (!!extraClasses) {
+          return createElement(tag, [extraClasses, ...classNames], modifiersFn)
+        } else {
+          return createElement(tag, classNames, modifiersFn)
+        }
+        //return createElement(tag, [css, ...classNames])
       },
     }
   )
@@ -676,8 +738,8 @@ function createElement(
  * @returns A function that can be called to dispose of the view
  */
 export function render(viewInstance: View<any>, target: HTMLElement) {
-  const id = uid()
-  const { startMarker, endMarker } = createRenderMarkers(`pulse:${id}`)
+  const id = Ident.create("pulse")
+  const { startMarker, endMarker } = createRenderMarkers(id)
 
   activeRoots.add(viewInstance)
 
@@ -706,8 +768,9 @@ function element(
   name: string,
   props: any = EMPTY_PROPS,
   children: Children = EMPTY_CHILDREN,
-  customClasses: string[] = []
-) {
+  customClasses: string[] = [],
+  customModifers: ModifierBuilder<any> = NOOP
+): ElementModifiers {
   const el = document.createElement(name)
 
   if (typeof props === "function") {
@@ -730,7 +793,12 @@ function element(
     } else if (key.startsWith("on")) {
       el.addEventListener(key.slice(2).toLowerCase(), props[key])
     } else if (key === "style") {
-      el.style.cssText = props[key]
+      if (typeof props[key] === "string") el.style.cssText = props[key]
+      else
+        for (const styleKey in props[key]) {
+          // TODO: Test this
+          setElProp(el.style as any, styleKey, props[key][styleKey])
+        }
     } else if (key === "html") {
       setElProp(el, "innerHTML", props[key])
     } else if (key === "for") {
@@ -746,7 +814,68 @@ function element(
         el.dataset[dataKey] = props[key][dataKey]
       }
     } else if (key === "use") {
-      queueMicrotask(() => props[key](el))
+      const activeView = View.active
+      queueMicrotask(() => {
+        const dispose = props[key](el)
+        if (typeof dispose === "function") {
+          if (activeView) activeView.hooks.onDispose(dispose)
+          else config.verbose && console.warn("No active view to dispose")
+        }
+      })
+    } else if (key.startsWith("$")) {
+      const attrName = key.slice(1)
+      // Set up two-way binding
+      if (isMutableSignal(props[key])) {
+        const signal = props[key]
+        const dispose = signal.subscribe((value) => {
+          //@ts-ignore
+          if (el[attrName] !== value) {
+            setElProp(el, attrName, value)
+          }
+        })
+        View.active?.hooks.onDispose(dispose)
+        // this is only for value, right?
+        let removeListener: () => void
+        if (attrName === "value") {
+          const handler = (e: InputEvent) => {
+            signal.set((e.target as HTMLInputElement).value)
+          }
+          el.addEventListener("input", handler)
+          removeListener = () => {
+            el.removeEventListener("input", handler)
+          }
+        } else if (attrName === "checked") {
+          const handler = (e: InputEvent) => {
+            signal.set((e.target as HTMLInputElement).checked)
+          }
+          el.addEventListener("change", handler)
+          removeListener = () => {
+            el.removeEventListener("change", handler)
+          }
+        } else if (attrName === "selected") {
+          const handler = (e: InputEvent) => {
+            // this is probably not right...
+            //@ts-ignore
+            signal.set((e.target as HTMLSelectElement).selected)
+          }
+          el.addEventListener("change", handler)
+          removeListener = () => {
+            el.removeEventListener("change", handler)
+          }
+        } else {
+          //?
+          const handler = (e: InputEvent) => {
+            signal.set((e.target as HTMLInputElement).value)
+          }
+          el.addEventListener("input", handler)
+          removeListener = () => {
+            el.removeEventListener("input", handler)
+          }
+        }
+        if (removeListener) View.active?.hooks.onDispose(removeListener)
+      } else {
+        setElAttr(el, attrName, props[key])
+      }
     } else {
       setElAttr(el, key, props[key])
     }
@@ -772,6 +901,30 @@ function element(
       config.verbose && console.error("Invalid children", result)
     }
   })
+
+  let modifiers = {
+    get element() {
+      return el
+    },
+    // modifiers
+    css: (styles: TemplateStringsArray | string, ...args: any[]) => {
+      const src = typeof styles === "string" ? [styles] : styles
+      const css = withAutoScope(() => cssTemplate(src as any, ...args))
+      el.classList.add(css)
+      return modifiers
+    },
+  }
+  if (customModifers !== NOOP) {
+    const extraModifiers = customModifers(modifiers)
+    if (extraModifiers) {
+      return {
+        ...modifiers,
+        ...extraModifiers,
+      }
+    }
+  }
+  return customModifers(modifiers)
+  // return modifiers
 }
 
 function setElAttr(el: Element, key: string, value: any) {
@@ -818,10 +971,12 @@ function insertBetweenMarkers(node: Node, start: Comment, end: Comment) {
 }
 
 function removeBetweenMarkers(start: Comment, end: Comment) {
-  const range = document.createRange()
-  range.setStartAfter(start)
-  range.setEndBefore(end)
-  range.deleteContents()
+  if (start.isConnected) {
+    const range = document.createRange()
+    range.setStartAfter(start)
+    range.setEndBefore(end)
+    range.deleteContents()
+  }
 }
 
 function displayError(startMarker: Comment, endMarker: Comment, error: any) {
@@ -842,6 +997,6 @@ function displayError(startMarker: Comment, endMarker: Comment, error: any) {
   insertBetweenMarkers(errorMessage, startMarker, endMarker)
 }
 
-function uid() {
-  return Math.random().toString(36).slice(2)
-}
+// function uid() {
+//   return Math.random().toString(36).slice(2)
+// }

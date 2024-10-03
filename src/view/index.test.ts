@@ -335,6 +335,41 @@ describe("View", () => {
     expect(document.body.innerHTML).toContain("css-")
   })
 
+  it("Should support extending elements and adding modifiers", () => {
+    const Button = tags.button.extend(
+      /*css*/ `
+        padding: 1rem;
+      `, //`
+      (mod) => ({
+        outlined() {
+          mod.element.style.outline = "1px solid red"
+        },
+      })
+    )
+
+    const MyComponent = view(() => {
+      Button(() => text("Click Me")).outlined()
+    })
+
+    expect(Button).toBeDefined()
+    const btn = Button()
+    expect(btn).toBeDefined()
+    // Default Modifiers
+    expect(btn.css).toBeDefined()
+    expect(btn.element).toBeDefined()
+    // custom modifiers
+    expect(btn.outlined).toBeDefined()
+    expect(btn.outlined).toBeFunction()
+
+    expect(MyComponent).toBeDefined()
+
+    render(MyComponent(), document.body)
+    console.log(document.body.innerHTML)
+    expect(document.body.innerHTML).toContain("Click Me")
+    expect(document.body.innerHTML).toContain("css-")
+    expect(document.body.innerHTML).toContain("red") // from outlined modifier
+  })
+
   it("Should support conditional rendering with `when` block", () => {
     const display = signal(false)
 
@@ -654,6 +689,59 @@ describe("View", () => {
     remove()
     expect(document.body.innerHTML).not.toContain("Hello")
     expect(disposed).toBeTrue()
+  })
+
+  it("Shoud support onDispose hooks for components with children", () => {
+    let disposeCount = 0
+    let toggle = signal(true)
+
+    const MyComponent = view((props, children) => {
+      expect(onDispose).toBeDefined()
+      expect(onDispose).toBeInstanceOf(Function)
+      onDispose(() => {
+        disposeCount++
+      })
+      tags.div(() => {
+        children()
+      })
+      when(
+        () => toggle,
+        () => {
+          onDispose(() => {
+            disposeCount++
+          })
+          tags.div(() => {
+            text("Hello")
+          })
+        },
+        () => {
+          onDispose(() => {
+            disposeCount++
+          })
+          tags.div(() => {
+            text("Goodbye")
+          })
+        }
+      )
+    })
+
+    expect(MyComponent).toBeDefined()
+    const remove = render(
+      MyComponent({}, () => text("Welcome")),
+      document.body
+    )
+
+    expect(disposeCount).toBe(0)
+    expect(document.body.innerHTML).toContain("Welcome")
+    expect(document.body.innerHTML).toContain("Hello")
+
+    toggle.set(false)
+    expect(document.body.innerHTML).toContain("Goodbye")
+    expect(disposeCount).toBe(1)
+
+    remove()
+    expect(document.body.innerHTML).not.toContain("Hello")
+    expect(disposeCount).toBe(3)
   })
 
   it("Should support environment variables", () => {

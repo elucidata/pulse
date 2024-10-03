@@ -138,6 +138,7 @@ Signals comply with Svelte's store contract:
 
 Included is a tiny experimental view engine you can play with. Feedback is welcome. Pulse View is a declarative, statement-based, reactive UI toolkit.
 
+- **No Build Step**: No compiler/transpiler required.
 - **No Virtual DOM**: Live DOM nodes are created and deleted by builders.
 - **Signal-Driven Updates**: Updates are reactions to signal values only.
 - **Reactive Sections**: Parts of a view can be reactive when denoted with `when`, `each`, or `live`.

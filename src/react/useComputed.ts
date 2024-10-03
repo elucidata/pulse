@@ -1,12 +1,18 @@
-import { useEffect, useRef, useState } from "react"
-import { Computation } from "../internals"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Computation, ISignal, isSignal } from "../internals"
 
-export function useComputed<T>(computeFn: () => T): T {
-  const [value, setValue] = useState<T>(() => computeFn())
-  const computeFnRef = useRef(computeFn)
+export function useComputed<T>(computeFn: (() => T) | ISignal<T>): T {
+  const wrapper = useMemo<() => T>(() => {
+    if (isSignal(computeFn)) {
+      return () => computeFn.get()
+    }
+    return computeFn
+  }, [computeFn])
+  const [value, setValue] = useState<T>(() => wrapper())
+  const computeFnRef = useRef(wrapper)
 
   // Update the compute function reference
-  computeFnRef.current = computeFn
+  computeFnRef.current = wrapper
 
   const computationRef = useRef<Computation | null>(null)
 

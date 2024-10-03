@@ -23,7 +23,8 @@ export const PulseComponent = React.memo(function PulseTNGComponent({
   )
 
   return React.createElement("div", {
-    ref: (div: HTMLDivElement | null) => {
+    style: { display: "contents" },
+    ref: (div: HTMLDivElement | null): void => {
       if (!div) return
       divRef.current = div
       if (disposeRef.current) return
@@ -32,6 +33,9 @@ export const PulseComponent = React.memo(function PulseTNGComponent({
   })
 })
 
+/**
+ * @deprecated
+ */
 export const PulseLegacyComponent = React.memo(function PulseComponent<
   T extends ComponentFunction
 >({ component }: { component: T; props: ExtractComponentProps<T> }) {
