@@ -32,37 +32,42 @@ type DomBuilder<P = any> = (
   children: Children,
   api: ViewHooks
 ) => void
-type Designable = {
+interface Designable<M> {
   design: {
     css(
       styles: TemplateStringsArray | string,
       ...args: any[]
-    ): ElementBuilder<any> & Designable
+    ): ElementBuilder<any, M> & Designable<M>
   }
-  extend(css: string): ElementBuilder<any> & Designable
-  extend(modifiers: ModifierBuilder<any>): ElementBuilder<any> & Designable
-  extend(
+  extend(css: string): ElementBuilder<any, M> & Designable<M>
+  extend<N>(
+    modifiers: ModifierBuilder<N>
+  ): ElementBuilder<any, M & N> & Designable<M & N>
+  extend<N>(
     css: string,
-    modifiers: ModifierBuilder<any>
-  ): ElementBuilder<any> & Designable
+    modifiers: ModifierBuilder<N>
+  ): ElementBuilder<any, M & N> & Designable<M & N>
 }
-type ElementBuilder<P> = {
-  (props: P, children: Children): ElementModifiers
-  (props: P): ElementModifiers
-  (children: Children): ElementModifiers
-  (): ElementModifiers
-} & Designable
-type ModifierBuilder<T> = (modifiers: ElementModifiers) => T
-type ElementModifiers = {
+type ElementBuilder<P, M> = {
+  (props: P, children: Children): ElementModifiers<M>
+  (props: P): ElementModifiers<M>
+  (children: Children): ElementModifiers<M>
+  (): ElementModifiers<M>
+} & Designable<M>
+type ModifierBuilder<N> = (modifiers: BaseModifiers) => N
+type BaseModifiers<M = any> = {
   element: HTMLElement
-  css: (
-    styles: TemplateStringsArray | string,
-    ...args: any[]
-  ) => ElementModifiers
+  view: View<any> | null
+  transitionName(name: string): BaseModifiers & M
+  css: (styles: TemplateStringsArray | string, ...args: any[]) => BaseModifiers
+}
+type ElementModifiers<M> = BaseModifiers<M> & M
+type MaybeSignal<T> = {
+  [P in keyof T]: T[P] | ISignal<T[P]>
 }
 
 const NOOP = () => {}
-const IDENT = <T>(input: T): T => input
+// const IDENT = <T>(input: T): T => input
 const EMPTY_PROPS = {}
 const EMPTY_CHILDREN: Children = NOOP
 
@@ -671,16 +676,19 @@ export function each<T>(
  */
 export const tags: {
   [key in keyof HTMLElementTagNameMap]: ElementBuilder<
-    Partial<Omit<HTMLElementTagNameMap[key], "style">> &
+    Partial<MaybeSignal<Omit<HTMLElementTagNameMap[key], "style">>> &
       Partial<{
-        style: CSSStyleDeclaration | string
+        class: string | ISignal<string>
+        style: CSSStyleDeclaration | string //| ISignal<string>
         ref: (el: HTMLElement) => void
         use: (el: HTMLElement) => void
         key: any
+        switch: boolean | ISignal<boolean> // Safari-only for now
         $value: ISignal<any>
         $checked: ISignal<boolean>
         $selected: ISignal<boolean>
-      }>
+      }>,
+    {}
   >
 } = new Proxy({} as any, {
   get(target, key: any) {
@@ -691,43 +699,53 @@ export const tags: {
   },
 })
 
-function createElement(
+function createElement<P = any, M = {}>(
   tag: string,
   classNames: string[] = [],
-  modifiers: ModifierBuilder<any> = NOOP
-): ElementBuilder<any> {
-  return Object.assign(
-    function Element(props: any, children: Children) {
+  modifiers?: ModifierBuilder<M>
+): ElementBuilder<P, M> {
+  const elementFn = Object.assign(
+    function Element(props?: P, children?: Children) {
       return element(tag, props, children, classNames, modifiers)
-    } as ElementBuilder<any>,
+    },
     {
       design: {
         css: (styles: TemplateStringsArray | string, ...args: any[]) => {
           const src = typeof styles === "string" ? [styles] : styles
           const css = withAutoScope(() => cssTemplate(src as any, ...args))
-          return createElement(tag, [css, ...classNames])
+          return createElement<P, M>(tag, [css, ...classNames], modifiers)
         },
       },
-      extend(cssOrModifiers: string | ModifierBuilder<any>, modifiers?: any) {
+      extend<N>(
+        cssOrModifiers: string | ModifierBuilder<N>,
+        newModifiers?: ModifierBuilder<N>
+      ): ElementBuilder<P, M & N> & Designable<M & N> {
         const cssString =
-          typeof cssOrModifiers === "string" ? [cssOrModifiers] : ""
-        const modifiersFn =
-          typeof cssOrModifiers === "function" ? cssOrModifiers : modifiers
-        let extraClasses = ""
+          typeof cssOrModifiers === "string" ? cssOrModifiers : undefined
+        const modifiersFn: ModifierBuilder<N> =
+          typeof cssOrModifiers === "function" ? cssOrModifiers : newModifiers!
+        let extraClasses: string[] = []
 
-        if (!!cssString) {
-          extraClasses = withAutoScope(() => cssTemplate(cssString as any))
+        if (cssString) {
+          const cssClass = withAutoScope(() => cssTemplate([cssString] as any))
+          extraClasses.push(cssClass)
         }
 
-        if (!!extraClasses) {
-          return createElement(tag, [extraClasses, ...classNames], modifiersFn)
-        } else {
-          return createElement(tag, classNames, modifiersFn)
+        const combinedModifiers: ModifierBuilder<M & N> = (baseModifiers) => {
+          const prev = modifiers ? modifiers(baseModifiers) : ({} as M)
+          const next = modifiersFn ? modifiersFn(baseModifiers) : ({} as N)
+          return { ...prev, ...next }
         }
-        //return createElement(tag, [css, ...classNames])
+
+        return createElement<P, M & N>(
+          tag,
+          [...extraClasses, ...classNames],
+          combinedModifiers
+        )
       },
-    }
-  )
+    } as Designable<M>
+  ) as ElementBuilder<P, M>
+  return elementFn
 }
 
 /**
@@ -764,18 +782,19 @@ export function render(viewInstance: View<any>, target: HTMLElement) {
   }
 }
 
-function element(
+function element<P, M>(
   name: string,
   props: any = EMPTY_PROPS,
   children: Children = EMPTY_CHILDREN,
   customClasses: string[] = [],
-  customModifers: ModifierBuilder<any> = NOOP
-): ElementModifiers {
+  customModifiers?: ModifierBuilder<M>
+): ElementModifiers<M> {
+  const activeView = View.active
   const el = document.createElement(name)
 
   if (typeof props === "function") {
     children = props
-    props = {}
+    props = {} as P
   }
 
   if (
@@ -784,7 +803,7 @@ function element(
     isSignal(props)
   ) {
     children = props as any
-    props = {}
+    props = {} as P
   }
 
   for (const key in props) {
@@ -834,50 +853,26 @@ function element(
           }
         })
         View.active?.hooks.onDispose(dispose)
-        // this is only for value, right?
-        let removeListener: () => void
-        if (attrName === "value") {
-          const handler = (e: InputEvent) => {
-            signal.set((e.target as HTMLInputElement).value)
-          }
-          el.addEventListener("input", handler)
-          removeListener = () => {
-            el.removeEventListener("input", handler)
-          }
-        } else if (attrName === "checked") {
-          const handler = (e: InputEvent) => {
-            signal.set((e.target as HTMLInputElement).checked)
-          }
-          el.addEventListener("change", handler)
-          removeListener = () => {
-            el.removeEventListener("change", handler)
-          }
-        } else if (attrName === "selected") {
-          const handler = (e: InputEvent) => {
-            // this is probably not right...
-            //@ts-ignore
-            signal.set((e.target as HTMLSelectElement).selected)
-          }
-          el.addEventListener("change", handler)
-          removeListener = () => {
-            el.removeEventListener("change", handler)
-          }
-        } else {
-          //?
-          const handler = (e: InputEvent) => {
-            signal.set((e.target as HTMLInputElement).value)
-          }
-          el.addEventListener("input", handler)
-          removeListener = () => {
-            el.removeEventListener("input", handler)
-          }
+        const handler = (e: InputEvent) => {
+          signal.set((e.target as any)[attrName])
         }
-        if (removeListener) View.active?.hooks.onDispose(removeListener)
+        el.addEventListener("input", handler)
+        View.active?.hooks.onDispose(() => {
+          el.removeEventListener("input", handler)
+        })
       } else {
-        setElAttr(el, attrName, props[key])
+        if (key in el) {
+          setElProp(el, key, props[key])
+        } else {
+          setElAttr(el, key, props[key])
+        }
       }
     } else {
-      setElAttr(el, key, props[key])
+      if (key in el) {
+        setElProp(el, key, props[key])
+      } else {
+        setElAttr(el, key, props[key])
+      }
     }
   }
 
@@ -902,11 +897,18 @@ function element(
     }
   })
 
-  let modifiers = {
+  let modifiers: BaseModifiers = {
     get element() {
       return el
     },
-    // modifiers
+    get view() {
+      return activeView
+    },
+    transitionName(name: string) {
+      //@ts-ignore
+      el.style.viewTransitionName = name
+      return modifiers
+    },
     css: (styles: TemplateStringsArray | string, ...args: any[]) => {
       const src = typeof styles === "string" ? [styles] : styles
       const css = withAutoScope(() => cssTemplate(src as any, ...args))
@@ -914,17 +916,12 @@ function element(
       return modifiers
     },
   }
-  if (customModifers !== NOOP) {
-    const extraModifiers = customModifers(modifiers)
-    if (extraModifiers) {
-      return {
-        ...modifiers,
-        ...extraModifiers,
-      }
-    }
-  }
-  return customModifers(modifiers)
-  // return modifiers
+  let extraModifiers = customModifiers ? customModifiers(modifiers) : ({} as M)
+  modifiers = {
+    ...modifiers,
+    ...extraModifiers,
+  } as ElementModifiers<M>
+  return modifiers as ElementModifiers<M>
 }
 
 function setElAttr(el: Element, key: string, value: any) {

@@ -116,7 +116,7 @@ describe("View", () => {
       div({}, () => "Three")
       div({ class: "done" }, () => "Four")
       div(() => text("Five"))
-      div(text("Six")) // This will not nest the text node
+      div(() => text("Six")) // This will not nest the text node
     })
 
     expect(Test).toBeDefined()
@@ -124,7 +124,7 @@ describe("View", () => {
     const output = Test()
     expect(output).toBeDefined()
     expect(getHTML(output.dom)).toEqual(
-      '<div>One</div><div>Two</div><div>Three</div><div class="done">Four</div><div>Five</div>Six<div></div>'
+      '<div>One</div><div>Two</div><div>Three</div><div class="done">Four</div><div>Five</div><div>Six</div>'
     )
     // console.log(getHTML(output.dom))
   })
@@ -336,16 +336,11 @@ describe("View", () => {
   })
 
   it("Should support extending elements and adding modifiers", () => {
-    const Button = tags.button.extend(
-      /*css*/ `
-        padding: 1rem;
-      `, //`
-      (mod) => ({
-        outlined() {
-          mod.element.style.outline = "1px solid red"
-        },
-      })
-    )
+    const Button = tags.button.extend("color:maroon;", ({ element }) => ({
+      outlined(color = "red") {
+        element.style.outline = `1px solid ${color}`
+      },
+    }))
 
     const MyComponent = view(() => {
       Button(() => text("Click Me")).outlined()
