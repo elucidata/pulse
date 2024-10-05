@@ -336,9 +336,11 @@ describe("View", () => {
   })
 
   it("Should support extending elements and adding modifiers", () => {
-    const Button = tags.button.extend("color:maroon;", ({ element }) => ({
+    const Button = tags.button.extend("color:maroon;", (mod, { element }) => ({
       outlined(color = "red") {
         element.style.outline = `1px solid ${color}`
+
+        return mod
       },
     }))
 
@@ -350,8 +352,8 @@ describe("View", () => {
     const btn = Button()
     expect(btn).toBeDefined()
     // Default Modifiers
-    expect(btn.css).toBeDefined()
-    expect(btn.element).toBeDefined()
+    expect(btn.style).toBeDefined()
+    expect(btn.transitionName).toBeDefined()
     // custom modifiers
     expect(btn.outlined).toBeDefined()
     expect(btn.outlined).toBeFunction()

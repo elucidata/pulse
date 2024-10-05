@@ -8,7 +8,12 @@ import {
   Ident,
   withIdPrefix,
 } from "../internals"
-import { css as cssTemplate, applyStylesToDOM, withAutoScope } from "./css"
+import {
+  css as cssTemplate,
+  applyStylesToDOM,
+  withAutoScope,
+  classNames,
+} from "./css"
 
 export * from "../internals"
 
@@ -23,15 +28,19 @@ interface ViewFactory<P> {
   (props: P, children: Children): View<P>
   styles(css: string): ViewFactory<P>
 }
+
 type Children = () => void | string | number | ISignal<any>
+
 type ViewHooks = {
   onDispose: (callback: Function) => void
 }
+
 type DomBuilder<P = any> = (
   props: P,
   children: Children,
   api: ViewHooks
 ) => void
+
 interface Designable<M> {
   design: {
     css(
@@ -39,32 +48,54 @@ interface Designable<M> {
       ...args: any[]
     ): ElementBuilder<any, M> & Designable<M>
   }
-  extend(css: string): ElementBuilder<any, M> & Designable<M>
-  extend<N>(
-    modifiers: ModifierBuilder<N>
-  ): ElementBuilder<any, M & N> & Designable<M & N>
-  extend<N>(
-    css: string,
-    modifiers: ModifierBuilder<N>
-  ): ElementBuilder<any, M & N> & Designable<M & N>
 }
+
 type ElementBuilder<P, M> = {
   (props: P, children: Children): ElementModifiers<M>
   (props: P): ElementModifiers<M>
   (children: Children): ElementModifiers<M>
   (): ElementModifiers<M>
+
+  extend(css: string): ElementBuilder<P, M> & Designable<M>
+  extend<N>(
+    modifiers: ModifierBuilder<N>
+  ): ElementBuilder<P, M & N> & Designable<M & N>
+  extend<N>(
+    css: string,
+    modifiers: ModifierBuilder<N>
+  ): ElementBuilder<P, M & N> & Designable<M & N>
 } & Designable<M>
-type ModifierBuilder<N> = (modifiers: BaseModifiers) => N
-type BaseModifiers<M = any> = {
+
+type ModifierBuilder<N> = (
+  modifiers: BaseModifiers,
+  context: ModifierBuilderContext
+) => N
+
+type ModifierBuilderContext = {
   element: HTMLElement
-  view: View<any> | null
-  transitionName(name: string): BaseModifiers & M
-  css: (styles: TemplateStringsArray | string, ...args: any[]) => BaseModifiers
+  onDispose: (callback: Function) => void
+  bindValue: <T>(value: ReactiveValue<T>, callback: ReactiveCallback<T>) => void
+  bindEvent: <T extends keyof HTMLElementEventMap>(
+    event: T,
+    callback: (e: HTMLElementEventMap[T]) => void
+  ) => void
 }
-type ElementModifiers<M> = BaseModifiers<M> & M
+
+type BaseModifiers = ReturnType<typeof createBaseModifiers>
+
+type ElementModifiers<M> = Chainable<BaseModifiers & M>
+
 type MaybeSignal<T> = {
   [P in keyof T]: T[P] | ISignal<T[P]>
 }
+
+type Chainable<T> = {
+  [K in keyof T]: T[K] extends (...args: infer A) => any
+    ? (...args: A) => Chainable<T>
+    : T[K]
+}
+
+export type ExtractProps<T> = T extends ElementBuilder<infer P, any> ? P : never
 
 const NOOP = () => {}
 // const IDENT = <T>(input: T): T => input
@@ -93,7 +124,6 @@ export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
     function instantiate(...args: any[]) {
       return withIdPrefix(idPrefix, () => {
         const instance = new View(builder, args)
-        viewRegistry.set(instance.id, instance)
         return instance
       })
     } as ViewFactory<P>,
@@ -116,6 +146,7 @@ export class View<P> {
   env?: Map<string, any>
 
   constructor(private _builder: DomBuilder, args: any[]) {
+    viewRegistry.set(this.id, this)
     this.parent = View.active
     if (this.parent) {
       this.parent.children.add(this)
@@ -200,6 +231,7 @@ export class View<P> {
     if (this.parent) {
       this.parent.children.delete(this)
     }
+    viewRegistry.delete(this.id)
   }
 
   static active: View<any> | null = null
@@ -731,10 +763,24 @@ function createElement<P = any, M = {}>(
           extraClasses.push(cssClass)
         }
 
-        const combinedModifiers: ModifierBuilder<M & N> = (baseModifiers) => {
-          const prev = modifiers ? modifiers(baseModifiers) : ({} as M)
-          const next = modifiersFn ? modifiersFn(baseModifiers) : ({} as N)
-          return { ...prev, ...next }
+        const combinedModifiers: ModifierBuilder<M & N> = (
+          baseModifiers,
+          context
+        ) => {
+          const prev = modifiers ? modifiers(baseModifiers, context) : ({} as M)
+          const next = modifiersFn
+            ? modifiersFn(baseModifiers, context)
+            : ({} as N)
+          const merged = { ...prev, ...next } as M & N
+          // return merged
+          // update merged to support chaining...
+          return Object.keys(merged as any).reduce((modifiers: any, key) => {
+            modifiers[key] = (...args: any[]) => {
+              ;(merged as any)[key](...args)
+              return merged
+            }
+            return modifiers
+          }, {} as M & N) // How do I get these types to merge properly for chaining? Or do I do that at the createElement level?
         }
 
         return createElement<P, M & N>(
@@ -789,7 +835,7 @@ function element<P, M>(
   customClasses: string[] = [],
   customModifiers?: ModifierBuilder<M>
 ): ElementModifiers<M> {
-  const activeView = View.active
+  // const activeView = View.active
   const el = document.createElement(name)
 
   if (typeof props === "function") {
@@ -897,31 +943,69 @@ function element<P, M>(
     }
   })
 
-  let modifiers: BaseModifiers = {
-    get element() {
-      return el
+  let modifiers: BaseModifiers = createBaseModifiers(el)
+
+  if (customModifiers) {
+    let extraModifiers = {} as M
+    const context = {
+      element: el,
+      onDispose: (callback: Function) => {
+        View.active?.hooks.onDispose(callback)
+      },
+      bindValue: <T>(
+        value: ReactiveValue<T>,
+        callback: ReactiveCallback<T>
+      ) => {
+        View.active?.hooks.onDispose(bindValue(value, callback))
+      },
+      bindEvent: <T extends keyof HTMLElementEventMap>(
+        event: T,
+        callback: (e: HTMLElementEventMap[T]) => void
+      ) => {
+        View.active?.hooks.onDispose(bindEvent(el, event, callback))
+      },
+    }
+
+    extraModifiers = customModifiers(modifiers, context)
+    modifiers = Object.assign(modifiers, extraModifiers)
+  }
+
+  const chainableModifiers = makeChainable(modifiers)
+  return chainableModifiers as ElementModifiers<M>
+}
+
+function createBaseModifiers(el: HTMLElement) {
+  const modifiers = {
+    classNames: (...args: any[]) => {
+      const classes = classNames(...args)
+      el.classList.add(classes)
+      return modifiers
     },
-    get view() {
-      return activeView
+    style: (styles: string | Partial<CSSStyleDeclaration>) => {
+      if (typeof styles === "string") {
+        const currentStyles = el.getAttribute("style") || ""
+        el.style.cssText = currentStyles + styles
+      } else {
+        for (const key in styles) {
+          //@ts-ignore
+          el.style[key] = styles[key]
+        }
+      }
+      return modifiers
     },
     transitionName(name: string) {
       //@ts-ignore
       el.style.viewTransitionName = name
       return modifiers
     },
-    css: (styles: TemplateStringsArray | string, ...args: any[]) => {
-      const src = typeof styles === "string" ? [styles] : styles
-      const css = withAutoScope(() => cssTemplate(src as any, ...args))
-      el.classList.add(css)
-      return modifiers
-    },
+    // css: (styles: TemplateStringsArray | string, ...args: any[]) => {
+    //   const src = typeof styles === "string" ? [styles] : styles
+    //   const css = withAutoScope(() => cssTemplate(src as any, ...args))
+    //   el.classList.add(css)
+    //   return modifiers
+    // },
   }
-  let extraModifiers = customModifiers ? customModifiers(modifiers) : ({} as M)
-  modifiers = {
-    ...modifiers,
-    ...extraModifiers,
-  } as ElementModifiers<M>
-  return modifiers as ElementModifiers<M>
+  return modifiers
 }
 
 function setElAttr(el: Element, key: string, value: any) {
@@ -994,6 +1078,41 @@ function displayError(startMarker: Comment, endMarker: Comment, error: any) {
   insertBetweenMarkers(errorMessage, startMarker, endMarker)
 }
 
-// function uid() {
-//   return Math.random().toString(36).slice(2)
-// }
+function makeChainable<T extends object>(obj: T): Chainable<T> {
+  const chainableObj: any = {}
+  for (const key of Object.keys(obj)) {
+    const value = (obj as any)[key]
+    if (typeof value === "function") {
+      chainableObj[key] = function (...args: any[]) {
+        value.apply(obj, args)
+        return chainableObj
+      }
+    } else {
+      chainableObj[key] = value
+    }
+  }
+  return chainableObj
+}
+
+export type ReactiveValue<T> = T | ISignal<T>
+type ReactiveCallback<T> = (unwrappedValue: T) => void
+
+function bindValue<T>(
+  value: ReactiveValue<T>,
+  callback: ReactiveCallback<T>
+): () => void {
+  if (isSignal(value)) {
+    return value.subscribe(callback)
+  } else {
+    callback(value)
+    return NOOP
+  }
+}
+function bindEvent(
+  element: HTMLElement,
+  event: keyof HTMLElementEventMap,
+  callback: (e: HTMLElementEventMap[typeof event]) => void
+): () => void {
+  element.addEventListener(event, callback)
+  return () => element.removeEventListener(event, callback)
+}
