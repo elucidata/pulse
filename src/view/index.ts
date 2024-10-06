@@ -49,30 +49,35 @@ interface Designable<M> {
     ): ElementBuilder<any, M> & Designable<M>
   }
 }
+interface CssRecord {
+  [property: string]: string | number | CssRecord | Partial<CSSStyleDeclaration>
+}
 
-type ElementBuilder<P, M> = {
+type CustomCSS = (Partial<CSSStyleDeclaration> & CssRecord) | string
+type CustomStyleCSS = Partial<CSSStyleDeclaration> | string
+type ElementBuilder<P, M, E = HTMLElement> = {
   (props: P, children: Children): ElementModifiers<M>
   (props: P): ElementModifiers<M>
   (children: Children): ElementModifiers<M>
   (): ElementModifiers<M>
 
-  extend(css: string): ElementBuilder<P, M> & Designable<M>
+  extend(css: CustomCSS): ElementBuilder<P, M, E> & Designable<M>
   extend<N>(
-    modifiers: ModifierBuilder<N>
-  ): ElementBuilder<P, M & N> & Designable<M & N>
+    modifiers: ModifierBuilder<N, E>
+  ): ElementBuilder<P, M & N, E> & Designable<M & N>
   extend<N>(
-    css: string,
-    modifiers: ModifierBuilder<N>
-  ): ElementBuilder<P, M & N> & Designable<M & N>
+    css: CustomCSS,
+    modifiers: ModifierBuilder<N, E>
+  ): ElementBuilder<P, M & N, E> & Designable<M & N>
 } & Designable<M>
 
-type ModifierBuilder<N> = (
+type ModifierBuilder<N, E = HTMLElement> = (
   modifiers: BaseModifiers,
-  context: ModifierBuilderContext
+  context: ModifierBuilderContext<E>
 ) => N
 
-type ModifierBuilderContext = {
-  element: HTMLElement
+type ModifierBuilderContext<E = HTMLElement> = {
+  element: E
   onDispose: (callback: Function) => void
   bindValue: <T>(value: ReactiveValue<T>, callback: ReactiveCallback<T>) => void
   bindEvent: <T extends keyof HTMLElementEventMap>(
@@ -121,7 +126,7 @@ export const activeRoots = new Set<View<any>>()
 export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
   const idPrefix = Ident.prefix
   return Object.assign(
-    function instantiate(...args: any[]) {
+    function view(...args: any[]) {
       return withIdPrefix(idPrefix, () => {
         const instance = new View(builder, args)
         return instance
@@ -650,7 +655,7 @@ export function each<T>(
           hasWarnedAboutKeyExtractor = true
         }
 
-        let keyedView = keyedViews.get(key)
+        let keyedView //= keyedViews.get(key) // Force rebuild every time, for now
 
         if (!keyedView) {
           const subview = View.createBoundary(boundary, boundary.dom)
@@ -660,10 +665,21 @@ export function each<T>(
 
           keyedView = { key, view: subview }
         } // else a view already exists for this key, no need to rebuild
+        else {
+          // Extract current view from dom and reattach...
+          // console.log("🔴 🔴 🔴 🔴 REUSING VIEW", keyedView.view.id)
+        }
 
         newKeyedViews.set(key, keyedView)
-        const clone = keyedView.view.dom.cloneNode(true)
-        fragment.appendChild(clone)
+        // const clone = keyedView.view.dom.cloneNode(true)// this breaks event listeners
+        // fragment.appendChild(clone)
+
+        // What if this is a reused dom node? How do we detach from previous parent?
+        // if (keyedView && keyedView.view.dom.parentNode) {
+        //   keyedView.view.dom.parentNode.removeChild(keyedView.view.dom)
+        // }
+
+        fragment.appendChild(keyedView.view.dom)
       })
 
       keyedViews.forEach((keyedView, key) => {
@@ -711,7 +727,7 @@ export const tags: {
     Partial<MaybeSignal<Omit<HTMLElementTagNameMap[key], "style">>> &
       Partial<{
         class: string | ISignal<string>
-        style: CSSStyleDeclaration | string //| ISignal<string>
+        style: Partial<CSSStyleDeclaration> | string //| ISignal<string>
         ref: (el: HTMLElement) => void
         use: (el: HTMLElement) => void
         key: any
@@ -720,22 +736,25 @@ export const tags: {
         $checked: ISignal<boolean>
         $selected: ISignal<boolean>
       }>,
-    {}
+    {},
+    HTMLElementTagNameMap[key]
   >
 } = new Proxy({} as any, {
   get(target, key: any) {
     if (!(key in target)) {
-      target[key] = createElement(String(key).toLowerCase())
+      target[key] = createElement(
+        String(key).toLowerCase() as keyof HTMLElementTagNameMap
+      )
     }
     return target[key]
   },
 })
 
 function createElement<P = any, M = {}>(
-  tag: string,
+  tag: keyof HTMLElementTagNameMap,
   classNames: string[] = [],
   modifiers?: ModifierBuilder<M>
-): ElementBuilder<P, M> {
+): ElementBuilder<P, M, HTMLElementTagNameMap[typeof tag]> {
   const elementFn = Object.assign(
     function Element(props?: P, children?: Children) {
       return element(tag, props, children, classNames, modifiers)
@@ -748,12 +767,20 @@ function createElement<P = any, M = {}>(
           return createElement<P, M>(tag, [css, ...classNames], modifiers)
         },
       },
+
       extend<N>(
-        cssOrModifiers: string | ModifierBuilder<N>,
+        cssOrModifiers:
+          | (Partial<CSSStyleDeclaration> & CustomCSS)
+          | ModifierBuilder<N>,
         newModifiers?: ModifierBuilder<N>
-      ): ElementBuilder<P, M & N> & Designable<M & N> {
+      ): ElementBuilder<P, M & N, HTMLElementTagNameMap[typeof tag]> &
+        Designable<M & N> {
         const cssString =
-          typeof cssOrModifiers === "string" ? cssOrModifiers : undefined
+          typeof cssOrModifiers === "string"
+            ? cssOrModifiers
+            : typeof cssOrModifiers === "object"
+            ? convertToNestedCss(cssOrModifiers)
+            : undefined
         const modifiersFn: ModifierBuilder<N> =
           typeof cssOrModifiers === "function" ? cssOrModifiers : newModifiers!
         let extraClasses: string[] = []
@@ -772,15 +799,16 @@ function createElement<P = any, M = {}>(
             ? modifiersFn(baseModifiers, context)
             : ({} as N)
           const merged = { ...prev, ...next } as M & N
-          // return merged
-          // update merged to support chaining...
-          return Object.keys(merged as any).reduce((modifiers: any, key) => {
-            modifiers[key] = (...args: any[]) => {
-              ;(merged as any)[key](...args)
-              return merged
-            }
-            return modifiers
-          }, {} as M & N) // How do I get these types to merge properly for chaining? Or do I do that at the createElement level?
+          return merged
+          // update merged to support chaining... Not sure I need to do
+          // this now that I'm using the chainable helper
+          // return Object.keys(merged as any).reduce((modifiers: any, key) => {
+          //   modifiers[key] = (...args: any[]) => {
+          //     ;(merged as any)[key](...args)
+          //     return merged
+          //   }
+          //   return modifiers
+          // }, {} as M & N)
         }
 
         return createElement<P, M & N>(
@@ -790,8 +818,35 @@ function createElement<P = any, M = {}>(
         )
       },
     } as Designable<M>
-  ) as ElementBuilder<P, M>
+  ) as ElementBuilder<P, M, HTMLElementTagNameMap[typeof tag]>
   return elementFn
+}
+
+function camelToKebab(str: string) {
+  return str.replace(/([a-z0-9]|(?=[A-Z]))([A-Z])/g, "$1-$2").toLowerCase()
+}
+
+function convertToStyles(styles: Partial<CSSStyleDeclaration>) {
+  return Object.keys(styles).reduce((acc: string, key: any) => {
+    return acc + `${camelToKebab(key)}: ${styles[key]};`
+  }, "")
+}
+
+function convertToNestedCss(
+  styles: Partial<CSSStyleDeclaration> & CssRecord
+): string {
+  return Object.keys(styles)
+    .reduce((acc: string, key: string) => {
+      const value = styles[key]
+
+      if (typeof value === "object" && !Array.isArray(value)) {
+        const nestedStyles = convertToNestedCss(value as any)
+        return acc + `${key} { ${nestedStyles} } `
+      } else {
+        return acc + `${camelToKebab(key)}: ${value}; `
+      }
+    }, "")
+    .trim()
 }
 
 /**
@@ -856,7 +911,13 @@ function element<P, M>(
     if (key === "class" || key === "className") {
       setElProp(el, "className", props[key])
     } else if (key.startsWith("on")) {
-      el.addEventListener(key.slice(2).toLowerCase(), props[key])
+      const handler = props[key]
+      const eventName = key.slice(2).toLowerCase()
+      el.addEventListener(eventName, handler)
+      // should this be disposed?
+      View.active?.hooks.onDispose(() => {
+        el.removeEventListener(eventName, handler)
+      })
     } else if (key === "style") {
       if (typeof props[key] === "string") el.style.cssText = props[key]
       else
@@ -981,16 +1042,23 @@ function createBaseModifiers(el: HTMLElement) {
       el.classList.add(classes)
       return modifiers
     },
-    style: (styles: string | Partial<CSSStyleDeclaration>) => {
+    style: (styles: CustomStyleCSS) => {
+      const currentStyles = el.getAttribute("style") || ""
       if (typeof styles === "string") {
-        const currentStyles = el.getAttribute("style") || ""
         el.style.cssText = currentStyles + styles
       } else {
-        for (const key in styles) {
-          //@ts-ignore
-          el.style[key] = styles[key]
-        }
+        el.style.cssText = currentStyles + convertToStyles(styles)
+        // for (const key in styles) {
+        //   //@ts-ignore
+        //   el.style[key] = styles[key]
+        // }
       }
+      return modifiers
+    },
+    inert(freeze?: ReactiveValue<boolean>) {
+      bindValue(freeze, (value) => {
+        el.toggleAttribute("inert", value)
+      })
       return modifiers
     },
     transitionName(name: string) {
