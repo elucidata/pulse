@@ -46,7 +46,7 @@ export interface Designable<M> {
     css(
       styles: TemplateStringsArray | string,
       ...args: any[]
-    ): ElementBuilder<any, M> & Designable<M>
+    ): ElementBuilder<any, M, any> & Designable<M>
   }
 }
 export interface CssRecord {
@@ -55,11 +55,11 @@ export interface CssRecord {
 
 export type CustomCSS = (Partial<CSSStyleDeclaration> & CssRecord) | string
 export type CustomStyleCSS = Partial<CSSStyleDeclaration> | string
-export type ElementBuilder<P, M, E = HTMLElement> = {
-  (props: P, children: Children): ElementModifiers<M>
-  (props: P): ElementModifiers<M>
-  (children: Children): ElementModifiers<M>
-  (): ElementModifiers<M>
+export type ElementBuilder<P, M, E extends HTMLElement> = {
+  (props: P, children: Children): ElementModifiers<M, E>
+  (props: P): ElementModifiers<M, E>
+  (children: Children): ElementModifiers<M, E>
+  (): ElementModifiers<M, E>
 
   extend(css: CustomCSS): ElementBuilder<P, M, E> & Designable<M>
   extend<N>(
@@ -71,8 +71,8 @@ export type ElementBuilder<P, M, E = HTMLElement> = {
   ): ElementBuilder<P, M & N, E> & Designable<M & N>
 } & Designable<M>
 
-export type ModifierBuilder<N, E = HTMLElement> = (
-  modifiers: BaseModifiers,
+export type ModifierBuilder<N, E extends HTMLElement> = (
+  modifiers: BaseModifiers<E>,
   context: ModifierBuilderContext<E>
 ) => N
 
@@ -86,9 +86,17 @@ export type ModifierBuilderContext<E = HTMLElement> = {
   ) => void
 }
 
-export type BaseModifiers = ReturnType<typeof createBaseModifiers>
+export type BaseModifiers<E extends HTMLElement> = {
+  classNames: (...args: any[]) => BaseModifiers<E>
+  inert: (freeze?: ReactiveValue<boolean>) => BaseModifiers<E>
+  style: (styles: CustomStyleCSS) => BaseModifiers<E>
+  transitionName: (name: string) => BaseModifiers<E>
+  use: (callback: (element: E) => void) => BaseModifiers<E>
+}
 
-export type ElementModifiers<M> = Chainable<BaseModifiers & M>
+export type ElementModifiers<M, E extends HTMLElement> = Chainable<
+  BaseModifiers<E> & M
+>
 
 export type MaybeSignal<T> = {
   [P in keyof T]: T[P] | ISignal<T[P]>
@@ -100,7 +108,9 @@ export type Chainable<T> = {
     : T[K]
 }
 
-export type ExtractProps<T> = T extends ElementBuilder<infer P, any> ? P : never
+export type ExtractProps<T> = T extends ElementBuilder<infer P, any, any>
+  ? P
+  : never
 
 export const NOOP = () => {}
 export const EMPTY_PROPS = {}
@@ -801,11 +811,17 @@ export function getKeyForItem<T>(
 export function createElement<P = any, M = {}>(
   tag: keyof HTMLElementTagNameMap,
   classNames: string[] = [],
-  modifiers?: ModifierBuilder<M>
+  modifiers?: ModifierBuilder<M, HTMLElementTagNameMap[typeof tag]>
 ): ElementBuilder<P, M, HTMLElementTagNameMap[typeof tag]> {
   const elementFn = Object.assign(
     function Element(props?: P, children?: Children) {
-      return element(tag, props, children, classNames, modifiers)
+      return element<P, M, HTMLElementTagNameMap[typeof tag]>(
+        tag,
+        props,
+        children,
+        classNames,
+        modifiers
+      )
     },
     {
       design: {
@@ -819,8 +835,8 @@ export function createElement<P = any, M = {}>(
       extend<N>(
         cssOrModifiers:
           | (Partial<CSSStyleDeclaration> & CustomCSS)
-          | ModifierBuilder<N>,
-        newModifiers?: ModifierBuilder<N>
+          | ModifierBuilder<N, HTMLElementTagNameMap[typeof tag]>,
+        newModifiers?: ModifierBuilder<N, HTMLElementTagNameMap[typeof tag]>
       ): ElementBuilder<P, M & N, HTMLElementTagNameMap[typeof tag]> &
         Designable<M & N> {
         const cssString =
@@ -829,7 +845,10 @@ export function createElement<P = any, M = {}>(
             : typeof cssOrModifiers === "object"
             ? convertToNestedCss(cssOrModifiers)
             : undefined
-        const modifiersFn: ModifierBuilder<N> =
+        const modifiersFn: ModifierBuilder<
+          N,
+          HTMLElementTagNameMap[typeof tag]
+        > =
           typeof cssOrModifiers === "function" ? cssOrModifiers : newModifiers!
         let extraClasses: string[] = []
 
@@ -838,10 +857,10 @@ export function createElement<P = any, M = {}>(
           extraClasses.push(cssClass)
         }
 
-        const combinedModifiers: ModifierBuilder<M & N> = (
-          baseModifiers,
-          context
-        ) => {
+        const combinedModifiers: ModifierBuilder<
+          M & N,
+          HTMLElementTagNameMap[typeof tag]
+        > = (baseModifiers, context) => {
           const prev = modifiers ? modifiers(baseModifiers, context) : ({} as M)
           const next = modifiersFn
             ? modifiersFn(baseModifiers, context)
@@ -931,15 +950,15 @@ export function render(viewInstance: View<any>, target: HTMLElement) {
   }
 }
 
-export function element<P, M>(
+export function element<P, M, E extends HTMLElement>(
   name: string,
   props: any = EMPTY_PROPS,
   children: Children = EMPTY_CHILDREN,
   customClasses: string[] = [],
-  customModifiers?: ModifierBuilder<M>
-): ElementModifiers<M> {
+  customModifiers?: ModifierBuilder<M, E>
+): ElementModifiers<M, E> {
   // const activeView = View.active
-  const el = document.createElement(name)
+  const el: E = document.createElement(name) as E
 
   if (typeof props === "function") {
     children = props
@@ -1052,7 +1071,7 @@ export function element<P, M>(
     }
   })
 
-  let modifiers: BaseModifiers = createBaseModifiers(el)
+  let modifiers = createBaseModifiers<E>(el)
 
   if (customModifiers) {
     let extraModifiers = {} as M
@@ -1080,27 +1099,14 @@ export function element<P, M>(
   }
 
   const chainableModifiers = makeChainable(modifiers)
-  return chainableModifiers as ElementModifiers<M>
+  return chainableModifiers as ElementModifiers<M, E>
 }
 
-export function createBaseModifiers(el: HTMLElement) {
+export function createBaseModifiers<T extends HTMLElement>(el: T) {
   const modifiers = {
     classNames: (...args: any[]) => {
       const classes = classNames(...args)
       el.classList.add(classes)
-      return modifiers
-    },
-    style: (styles: CustomStyleCSS) => {
-      const currentStyles = el.getAttribute("style") || ""
-      if (typeof styles === "string") {
-        el.style.cssText = currentStyles + styles
-      } else {
-        el.style.cssText = currentStyles + convertToStyles(styles)
-        // for (const key in styles) {
-        //   //@ts-ignore
-        //   el.style[key] = styles[key]
-        // }
-      }
       return modifiers
     },
     inert(freeze?: ReactiveValue<boolean>) {
@@ -1109,17 +1115,25 @@ export function createBaseModifiers(el: HTMLElement) {
       })
       return modifiers
     },
+    style: (styles: CustomStyleCSS) => {
+      const currentStyles = el.getAttribute("style") || ""
+      if (typeof styles === "string") {
+        el.style.cssText = currentStyles + styles
+      } else {
+        el.style.cssText = currentStyles + convertToStyles(styles)
+      }
+      return modifiers
+    },
     transitionName(name: string) {
       //@ts-ignore
       el.style.viewTransitionName = name
       return modifiers
     },
-    // css: (styles: TemplateStringsArray | string, ...args: any[]) => {
-    //   const src = typeof styles === "string" ? [styles] : styles
-    //   const css = withAutoScope(() => cssTemplate(src as any, ...args))
-    //   el.classList.add(css)
-    //   return modifiers
-    // },
+    use(callback: (element: T) => void) {
+      const dispose = callback(el)
+      if (typeof dispose === "function") View.active?.hooks.onDispose(dispose)
+      return modifiers
+    },
   }
   return modifiers
 }

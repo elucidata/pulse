@@ -39,6 +39,21 @@ describe("View", () => {
     expect(Test.styles).toBeDefined()
   })
 
+  it("Should clean up global state after building", () => {
+    const Test = view(() => {
+      expect(View.active).toBeDefined()
+    })
+
+    expect(Test).toBeDefined()
+    expect(View.active).toBeNull()
+    const dispose = render(Test(), document.body)
+    expect(View.active).toBeNull()
+
+    expect(activeRoots.size).toEqual(1)
+    dispose()
+    expect(activeRoots.size).toEqual(0)
+  })
+
   it("Should render simple HTML elements", () => {
     const Test = view(() => {
       tags.div({}, () => "Hello World")
@@ -110,7 +125,9 @@ describe("View", () => {
     const div = tags.div
 
     const Test = view(() => {
-      div("One")
+      div("One").use((el) => {
+        el.innerHTML
+      })
       div(() => "Two")
       div({}, () => "Three")
       div({ class: "done" }, () => "Four")
