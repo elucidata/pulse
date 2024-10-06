@@ -118,6 +118,12 @@ export const EMPTY_CHILDREN: Children = NOOP
 
 export const activeRoots = new Set<View<any>>()
 
+function logVerbose(...messages: any) {
+  if (config.verbose) {
+    console.warn("[Pulse View]", ...messages)
+  }
+}
+
 /**
  * Creates a new view factory.
  *
@@ -180,7 +186,7 @@ export class View<P> {
         this.parent.dom.appendChild(this.dom)
       }
     } catch (error) {
-      config.verbose && console.error("Error in View builder:", error)
+      logVerbose("Error in View builder: ", error)
       const { startMarker, endMarker } = createRenderMarkers(`view:${this.id}`)
 
       // clear the dom
@@ -225,7 +231,7 @@ export class View<P> {
   hooks = {
     onDispose: (callback: Function) => {
       if (View.active !== this) {
-        config.verbose && console.warn("onDispose() called outside of view")
+        logVerbose("onDispose() called outside of view")
       }
       if (!this.disposeCallbacks) {
         this.disposeCallbacks = new Set()
@@ -258,7 +264,7 @@ export class View<P> {
     if (View.active) {
       View.active.dom.appendChild(child)
     } else {
-      config.verbose && console.warn("No active view")
+      logVerbose("No active view")
     }
   }
 
@@ -302,7 +308,7 @@ export class View<P> {
       const result = fn()
       return result
     } catch (error) {
-      config.verbose && console.error("Error in render context:", error)
+      logVerbose("Error in render context: ", error)
       throw error
     } finally {
       View.active = prevView
@@ -338,7 +344,7 @@ export function getEnv<T>(key: string): T | undefined {
   if (View.active) {
     return View.active.getEnv<T>(key)
   }
-  config.verbose && console.warn("No active view")
+  logVerbose("No active view")
   return undefined
 }
 
@@ -352,7 +358,7 @@ export function setEnv(key: string, value: any) {
   if (View.active) {
     View.active.setEnv(key, value)
   } else {
-    config.verbose && console.warn("No active view")
+    logVerbose("No active view")
   }
 }
 
@@ -364,7 +370,7 @@ export function onDispose(callback: Function) {
   if (View.active) {
     View.active.hooks.onDispose(callback)
   } else {
-    config.verbose && console.warn("No active view")
+    logVerbose("No active view")
   }
 }
 
@@ -392,7 +398,7 @@ export function when(
     activeView.dom.appendChild(startMarker)
     activeView.dom.appendChild(endMarker)
   } else {
-    config.verbose && console.warn("when(): No active view to append markers")
+    logVerbose("when(): No active view to append markers")
     return
   }
 
@@ -428,8 +434,7 @@ export function when(
           removeBetweenMarkers(startMarker, endMarker)
           hasError = false
         } catch (error) {
-          config.verbose &&
-            console.error("Error removing 'when' error content:", error)
+          logVerbose("Error removing 'when' error content:", error)
         }
       }
 
@@ -438,8 +443,7 @@ export function when(
           removeBetweenMarkers(startMarker, endMarker)
           container = null
         } catch (error) {
-          config.verbose &&
-            console.warn("Error removing 'when' content:", error)
+          logVerbose("Error removing 'when' content:", error)
         }
       }
 
@@ -460,7 +464,7 @@ export function when(
 
         insertBetweenMarkers(container, startMarker, endMarker)
       } catch (error) {
-        config.verbose && console.warn("Error in 'when' builder:", error)
+        logVerbose("Error in 'when' builder:", error)
         removeBetweenMarkers(startMarker, endMarker)
         displayError(startMarker, endMarker, error)
         container = null
@@ -468,7 +472,7 @@ export function when(
       }
     },
     (err) => {
-      config.verbose && console.error("💥 Error in 'when' effect:", err)
+      logVerbose("Error in 'when' effect:", err)
       removeBetweenMarkers(startMarker, endMarker)
       displayError(startMarker, endMarker, err)
       hasError = true
@@ -496,7 +500,7 @@ export function live(builder: () => void) {
     activeView.dom.appendChild(startMarker)
     activeView.dom.appendChild(endMarker)
   } else {
-    config.verbose && console.warn("live(): No active view to append markers")
+    logVerbose("live(): No active view to append markers")
     return
   }
 
@@ -510,7 +514,7 @@ export function live(builder: () => void) {
         removeBetweenMarkers(startMarker, endMarker)
         hasError = false
       } catch (error) {
-        config.verbose && console.error("Error removing 'live' content:", error)
+        logVerbose("Error removing 'live' error content:", error)
       }
     }
 
@@ -519,7 +523,7 @@ export function live(builder: () => void) {
         removeBetweenMarkers(startMarker, endMarker)
         container = null
       } catch (error) {
-        config.verbose && console.warn("Error removing 'live' content:", error)
+        logVerbose("Error removing 'live' content:", error)
       }
     }
 
@@ -535,7 +539,7 @@ export function live(builder: () => void) {
 
       insertBetweenMarkers(container, startMarker, endMarker)
     } catch (error) {
-      config.verbose && console.warn("Error in 'live' builder:", error)
+      logVerbose("Error in 'live' builder:", error)
       displayError(startMarker, endMarker, error)
       hasError = true
     }
@@ -618,15 +622,15 @@ export function each<T>(
     parentView.dom.appendChild(startMarker)
     parentView.dom.appendChild(endMarker)
   } else {
-    config.verbose && console.warn("each(): No active view to append markers")
+    logVerbose("each(): No active view to append markers")
     return
   }
 
-  let keyedViews = new Map<any, KeyedView<T>>()
-  let hasError = false
   let hasWarnedAboutKeyExtractor = false
+  let hasError = false
   let firstRun = true
   let boundary = View.createBoundary()
+  let keyedViews = new Map<any, KeyedView<T>>()
 
   const disposeEffect = effect(
     () => {
@@ -635,8 +639,7 @@ export function each<T>(
           removeBetweenMarkers(startMarker, endMarker)
           hasError = false
         } catch (error) {
-          config.verbose &&
-            console.error("Error removing 'each' error content:", error)
+          logVerbose("Error removing 'each' error content:", error)
         }
       }
 
@@ -644,8 +647,7 @@ export function each<T>(
       let currentList = isIterable(source) ? Array.from(source) : source
 
       if (!Array.isArray(currentList)) {
-        config.verbose &&
-          console.error("each(): Provided list is not an array", currentList)
+        logVerbose("each(): Provided list is not an array", currentList)
         currentList = []
       }
 
@@ -740,7 +742,7 @@ export function each<T>(
       keyedViews = newKeyedViews
     },
     (error) => {
-      config.verbose && console.error("Error in 'each' effect:", error)
+      logVerbose("Error in 'each' effect:", error)
       removeBetweenMarkers(startMarker, endMarker)
       displayError(startMarker, endMarker, error)
       hasError = true
@@ -806,8 +808,7 @@ export function getKeyForItem<T>(
     key = keyExtractor(item, index)
     if (!key) {
       key = index
-      config.verbose &&
-        console.warn("Key extractor returned falsy value (using index)")
+      logVerbose("Key extractor returned falsy value (using index)")
     }
   } else if ((item as any).id !== undefined) {
     key = (item as any).id
@@ -1023,7 +1024,7 @@ export function element<P, M, E extends HTMLElement>(
         const dispose = props[key](el)
         if (typeof dispose === "function") {
           if (activeView) activeView.hooks.onDispose(dispose)
-          else config.verbose && console.warn("No active view to dispose")
+          else logVerbose("No active view to dispose")
         }
       })
     } else if (key.startsWith("$")) {
@@ -1081,7 +1082,7 @@ export function element<P, M, E extends HTMLElement>(
       })
       View.active?.hooks.onDispose(disposeLiveChildren)
     } else if (resultType != "undefined") {
-      config.verbose && console.error("Invalid children", result)
+      logVerbose("Invalid children", result)
     }
   })
 
@@ -1287,5 +1288,5 @@ export function bindEvent(
 }
 
 export function isIterable<T>(value: any): value is Iterable<T> {
-  return value && typeof value[Symbol.iterator] === "function"
+  return value !== null && typeof value[Symbol.iterator] === "function"
 }
