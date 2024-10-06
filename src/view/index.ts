@@ -572,6 +572,8 @@ export function raw(html: TemplateStringsArray | string, ...args: any[]) {
 type KeyedView<T> = {
   key: any
   view: View<any>
+  startMarker: Comment
+  endMarker: Comment
 }
 
 /**
@@ -582,7 +584,7 @@ type KeyedView<T> = {
  * @param options - Optional configuration, including a key extractor function.
  */
 export function each<T>(
-  list: T[] | ISignal<T[]>,
+  list: T[] | ISignal<T[]> | Iterable<T> | ISignal<Iterable<T>>,
   itemBuilder: (item: T, index: number) => void,
   keyExtractor?: (item: T, index: number) => any
 ) {
@@ -605,6 +607,7 @@ export function each<T>(
   let keyedViews = new Map<any, KeyedView<T>>()
   let hasError = false
   let hasWarnedAboutKeyExtractor = false
+  let firstRun = true
   let boundary = View.createBoundary()
 
   const disposeEffect = effect(
@@ -619,12 +622,9 @@ export function each<T>(
         }
       }
 
-      let currentList: T[]
-      if (isSignal(list)) {
-        currentList = list.value
-      } else {
-        currentList = list
-      }
+      const source = getValue(list)
+      let currentList = isIterable(source) ? Array.from(source) : source
+
       if (!Array.isArray(currentList)) {
         config.verbose &&
           console.error("each(): Provided list is not an array", currentList)
@@ -640,7 +640,8 @@ export function each<T>(
           key = keyExtractor(item, index)
           if (!key) {
             key = index
-            config.verbose && console.warn("Key extractor returned falsy value")
+            config.verbose &&
+              console.warn("Key extractor returned falsy value (using index)")
           }
         } else if ((item as any).id !== undefined) {
           key = (item as any).id
@@ -655,43 +656,89 @@ export function each<T>(
           hasWarnedAboutKeyExtractor = true
         }
 
-        let keyedView //= keyedViews.get(key) // Force rebuild every time, for now
+        let keyedView = keyedViews.get(key)
 
         if (!keyedView) {
+          console.log("🟢 BUILDING VIEW", key)
           const subview = View.createBoundary(boundary, boundary.dom)
+          const viewId = Ident.create("each-item")
+          const { startMarker: viewStart, endMarker: viewEnd } =
+            createRenderMarkers(viewId)
+          const viewFragment = document.createDocumentFragment()
+
+          viewFragment.appendChild(viewStart)
+
           View.inRenderContext(subview, subview.dom, () =>
             itemBuilder(item, index)
           )
 
-          keyedView = { key, view: subview }
+          viewFragment.appendChild(subview.dom)
+          viewFragment.appendChild(viewEnd)
+
+          keyedView = {
+            key,
+            view: subview,
+            startMarker: viewStart,
+            endMarker: viewEnd,
+          }
+          fragment.appendChild(viewFragment)
         } // else a view already exists for this key, no need to rebuild
         else {
-          // Extract current view from dom and reattach...
-          // console.log("🔴 🔴 🔴 🔴 REUSING VIEW", keyedView.view.id)
+          console.log("🔴 REUSING VIEW", keyedView.key)
         }
 
         newKeyedViews.set(key, keyedView)
-        // const clone = keyedView.view.dom.cloneNode(true)// this breaks event listeners
-        // fragment.appendChild(clone)
-
-        // What if this is a reused dom node? How do we detach from previous parent?
-        // if (keyedView && keyedView.view.dom.parentNode) {
-        //   keyedView.view.dom.parentNode.removeChild(keyedView.view.dom)
-        // }
-
-        fragment.appendChild(keyedView.view.dom)
       })
 
-      keyedViews.forEach((keyedView, key) => {
-        if (!newKeyedViews.has(key)) {
-          keyedView.view.dispose()
+      if (firstRun) {
+        console.log("🟢 INSERTING DOM")
+
+        removeBetweenMarkers(startMarker, endMarker)
+        insertBetweenMarkers(fragment, startMarker, endMarker)
+
+        firstRun = false
+      } else {
+        console.log("🟠 UPDATING DOM")
+
+        // Remove any keyed views that are no longer in the list
+        keyedViews.forEach((keyedView, key) => {
+          if (!newKeyedViews.has(key)) {
+            keyedView.view.dispose()
+            removeBetweenMarkers(keyedView.startMarker, keyedView.endMarker)
+          }
+        })
+
+        // Rearrange the nodes to match the new order
+        const parentNode = startMarker.parentNode
+        if (parentNode) {
+          let referenceNode = startMarker.nextSibling
+
+          newKeyedViews.forEach((keyedView) => {
+            const { startMarker, endMarker } = keyedView
+
+            // Check if the node is already in the correct position
+            if (referenceNode === startMarker) {
+              // Nodes are already in the correct position
+              referenceNode = endMarker.nextSibling
+            } else {
+              // Move the nodes to the correct position
+              const nodesToMove = extractNodesIncludingMarkers(
+                startMarker,
+                endMarker
+              )
+              parentNode.insertBefore(nodesToMove, referenceNode)
+            }
+
+            // Update referenceNode to the next node after the inserted nodes
+            referenceNode = endMarker.nextSibling
+          })
+        } else {
+          console.warn("Parent node not found for 'each' content")
         }
-      })
+      }
 
+      // Update keyedViews to the new set
       keyedViews = newKeyedViews
-
-      removeBetweenMarkers(startMarker, endMarker)
-      insertBetweenMarkers(fragment, startMarker, endMarker)
     },
     (error) => {
       config.verbose && console.error("Error in 'each' effect:", error)
@@ -1128,6 +1175,23 @@ function removeBetweenMarkers(start: Comment, end: Comment) {
   }
 }
 
+function extractNodesIncludingMarkers(
+  startNode: Node,
+  endNode: Node
+): DocumentFragment {
+  const fragment = document.createDocumentFragment()
+  let currentNode: Node | null = startNode
+
+  while (currentNode) {
+    const nextNode: Node | null = currentNode.nextSibling
+    fragment.appendChild(currentNode)
+    if (currentNode === endNode) break
+    currentNode = nextNode
+  }
+
+  return fragment
+}
+
 function displayError(startMarker: Comment, endMarker: Comment, error: any) {
   const errorMessage = document.createElement("div")
   Object.assign(errorMessage.style, {
@@ -1165,6 +1229,10 @@ function makeChainable<T extends object>(obj: T): Chainable<T> {
 export type ReactiveValue<T> = T | ISignal<T>
 type ReactiveCallback<T> = (unwrappedValue: T) => void
 
+function getValue<T>(value: ReactiveValue<T>): T {
+  return isSignal(value) ? value.value : value
+}
+
 function bindValue<T>(
   value: ReactiveValue<T>,
   callback: ReactiveCallback<T>
@@ -1183,4 +1251,8 @@ function bindEvent(
 ): () => void {
   element.addEventListener(event, callback)
   return () => element.removeEventListener(event, callback)
+}
+
+function isIterable<T>(value: any): value is Iterable<T> {
+  return value && typeof value[Symbol.iterator] === "function"
 }

@@ -770,7 +770,8 @@ describe("View", () => {
       name,
       id: Math.random().toString(36).slice(2),
     })
-    const items = signal([obj("one"), obj("two"), obj("three")])
+    const reused = obj("reused")
+    const items = signal([obj("one"), obj("two"), reused])
 
     const MyComponent = view(() => {
       tags.div({ class: "List" }, () => {
@@ -785,11 +786,11 @@ describe("View", () => {
     const remove = render(MyComponent(), document.body)
     expect(document.body.innerHTML).toContain("one")
     expect(document.body.innerHTML).toContain("two")
-    expect(document.body.innerHTML).toContain("three")
+    expect(document.body.innerHTML).toContain("reused")
 
-    items.set([items.peek()[2], obj("four"), obj("five"), obj("six")])
+    items.set([reused, obj("four"), obj("five"), obj("six")])
 
-    expect(document.body.innerHTML).toContain("three")
+    expect(document.body.innerHTML).toContain("reused")
     expect(document.body.innerHTML).toContain("four")
     expect(document.body.innerHTML).toContain("five")
     expect(document.body.innerHTML).toContain("six")
