@@ -39,7 +39,7 @@
     "src/react/*.ts",
     "src/view/*.ts",
     "src/view/index.ts",
-    "src/view/index.test.ts",
+    "src/view/internals.test.ts",
     "src/view-legacy/html.ts",
     "src/view-legacy/runtime.ts",
     "src/view-legacy/widget.ts",

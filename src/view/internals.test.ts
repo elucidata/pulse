@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import {
-  signal,
   View,
   activeRoots,
   each,
@@ -14,8 +13,8 @@ import {
   text,
   view,
   when,
-  setVerbose,
-} from "./index"
+} from "./internals"
+import { signal, setVerbose } from "../internals"
 
 export const getHTML = (node: Node | Node[]) => {
   const div = document.createElement("div")
@@ -361,7 +360,7 @@ describe("View", () => {
     expect(MyComponent).toBeDefined()
 
     render(MyComponent(), document.body)
-    console.log(document.body.innerHTML)
+    // console.log(document.body.innerHTML)
     expect(document.body.innerHTML).toContain("Click Me")
     expect(document.body.innerHTML).toContain("css-")
     expect(document.body.innerHTML).toContain("red") // from outlined modifier

@@ -76,7 +76,7 @@ describe("css function", () => {
   })
 
   it("should not apply styles more than once", () => {
-    const consoleWarnSpy = spyOn(console, "debug").mockImplementation(() => {})
+    // const consoleWarnSpy = spyOn(console, "debug").mockImplementation(() => {})
     const className = css`
       :host {
         color: red;
@@ -90,11 +90,11 @@ describe("css function", () => {
 
     expect(styleCache.size).toBe(1)
 
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      "Styles already applied",
-      className
-    )
-    consoleWarnSpy.mockRestore()
+    // expect(consoleWarnSpy).toHaveBeenCalledWith(
+    //   "Styles already applied",
+    //   className
+    // )
+    // consoleWarnSpy.mockRestore()
   })
 
   it("should handle expressions in the styles", () => {

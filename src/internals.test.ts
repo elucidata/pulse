@@ -167,7 +167,11 @@ describe("Signals Module", () => {
       const unsubscribe = effect(
         () => {
           observedValue = signal.value
-          throw new Error("Test Error")
+          throw {
+            name: "Test Error",
+            message: "Test Error Message",
+          }
+          // throw new Error("Test Error")
         },
         (error) => {
           errorHandlerCalled = true
@@ -196,7 +200,11 @@ describe("Signals Module", () => {
           observedValue = signal.value
 
           return () => {
-            throw new Error("Test Cleanup Error")
+            throw {
+              name: "Test Cleanup Error",
+              message: "Test Cleanup Error Message",
+            }
+            // throw new Error("Test Cleanup Error")
           }
         },
         (error) => {
@@ -240,7 +248,11 @@ describe("Signals Module", () => {
 
       const unsubscribe = effect(() => {
         observedValue = signal.value
-        throw new Error("Test Error")
+        throw {
+          name: "Test Error",
+          message: "Test Error Message",
+        }
+        // throw new Error("Test Error")
       })
 
       expect(observedValue).toBe(1)
@@ -260,7 +272,11 @@ describe("Signals Module", () => {
       const unsubscribe = effect(
         () => {
           observedValue = signal.value
-          throw new Error("Test Error")
+          throw {
+            name: "Test Error",
+            message: "Test Error Message",
+          }
+          // throw new Error("Test Error")
         },
         (error) => {
           errorHandled = true
@@ -888,7 +904,11 @@ describe("event", () => {
   it("should handle errors in subscriber callbacks gracefully", () => {
     const myEvent = event<string>()
     const errorCallback = mock(() => {
-      throw new Error("Test error")
+      throw {
+        name: "Test Error",
+        message: "Test Error Message",
+      }
+      // throw new Error("Test error")
     })
     const callback = mock()
 
@@ -898,7 +918,7 @@ describe("event", () => {
 
     expect(callback).toHaveBeenCalledWith("test event")
     expect(errorCallback).toHaveBeenCalledWith("test event")
-    expect(errorCallback).toThrowError("Test error")
+    expect(errorCallback).toThrow("Test Error Message")
 
     myEvent.clear()
   })

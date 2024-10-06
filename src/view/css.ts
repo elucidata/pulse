@@ -101,7 +101,7 @@ function crcHash(str: string): number {
 
 export function applyStyles(className: string, styles: string): void {
   if (styleCache.has(className)) {
-    return console.debug("Styles already applied", className)
+    return //console.debug("Styles already applied", className)
   }
   styleCache.set(className, styles)
   applyStylesToDOM(styles)
