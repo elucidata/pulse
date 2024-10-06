@@ -226,7 +226,6 @@ export class View<P> {
     onDispose: (callback: Function) => {
       if (View.active !== this) {
         config.verbose && console.warn("onDispose() called outside of view")
-        // return // this breaks 'use' attributes
       }
       if (!this.disposeCallbacks) {
         this.disposeCallbacks = new Set()
@@ -236,12 +235,18 @@ export class View<P> {
   }
 
   dispose() {
-    this.children.forEach((child) => child.dispose())
+    for (const child of this.children) {
+      child.dispose()
+    }
     this.children.clear()
+
     if (this.disposeCallbacks) {
-      this.disposeCallbacks.forEach((callback) => callback())
+      for (const callback of this.disposeCallbacks) {
+        callback()
+      }
       this.disposeCallbacks.clear()
     }
+
     if (this.parent) {
       this.parent.children.delete(this)
     }
@@ -267,9 +272,13 @@ export class View<P> {
   }
   static appendToActiveElements(...children: Node[]) {
     if (View.activeElement) {
-      children.forEach((child) => View.activeElement!.appendChild(child))
+      for (const child of children) {
+        View.activeElement.appendChild(child)
+      }
     } else {
-      children.forEach((child) => View.appendToActiveView(child))
+      for (const child of children) {
+        View.appendToActiveView(child)
+      }
     }
   }
   static inNestedElement<T>(el: Node, fn: () => T): T {
@@ -643,7 +652,7 @@ export function each<T>(
       const newKeyedViews = new Map<any, KeyedView<T>>()
       const fragment = document.createDocumentFragment()
 
-      currentList.forEach((item, index) => {
+      for (const [index, item] of currentList.entries()) {
         let key: any = getKeyForItem<T>(index, keyExtractor, item)
 
         if (config.verbose && key === index && !hasWarnedAboutKeyExtractor) {
@@ -681,7 +690,7 @@ export function each<T>(
         } // else a view already exists for this key, no need to rebuild
 
         newKeyedViews.set(key, keyedView)
-      })
+      }
 
       if (firstRun) {
         // First run, just insert the fragment
@@ -691,19 +700,19 @@ export function each<T>(
         firstRun = false
       } else {
         // Remove any keyed views that are no longer in the list
-        keyedViews.forEach((keyedView, key) => {
+        for (const [key, keyedView] of keyedViews) {
           if (!newKeyedViews.has(key)) {
             keyedView.view.dispose()
             removeBetweenMarkers(keyedView.startMarker, keyedView.endMarker)
           }
-        })
+        }
 
         // Rearrange the nodes to match the new order
         const parentNode = startMarker.parentNode
         if (parentNode) {
           let referenceNode = startMarker.nextSibling
 
-          newKeyedViews.forEach((keyedView) => {
+          for (const keyedView of newKeyedViews.values()) {
             const { startMarker, endMarker } = keyedView
 
             // Check if the node is already in the correct position
@@ -721,7 +730,7 @@ export function each<T>(
 
             // Update referenceNode to the next node after the inserted nodes
             referenceNode = endMarker.nextSibling
-          })
+          }
         } else {
           console.warn("Parent node not found for 'each' content")
         }
@@ -741,9 +750,9 @@ export function each<T>(
   if (parentView) {
     parentView.hooks.onDispose(() => {
       disposeEffect()
-      keyedViews.forEach((keyedView) => {
+      for (const keyedView of keyedViews.values()) {
         keyedView.view.dispose()
-      })
+      }
       keyedViews.clear()
     })
   }
@@ -932,7 +941,9 @@ export function render(viewInstance: View<any>, target: HTMLElement) {
   target.appendChild(startMarker)
   const source = viewInstance.dom
   if (Array.isArray(source)) {
-    source.forEach((el) => target.appendChild(el))
+    for (const el of source) {
+      target.appendChild(el)
+    }
   } else {
     target.appendChild(source)
   }
@@ -1050,8 +1061,11 @@ export function element<P, M, E extends HTMLElement>(
     }
   }
 
-  if (customClasses.length)
-    customClasses.forEach((cls) => el.classList.add(cls))
+  if (customClasses.length) {
+    for (const cls of customClasses) {
+      el.classList.add(cls)
+    }
+  }
 
   View.appendToActiveElement(el)
 
