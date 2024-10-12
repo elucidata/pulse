@@ -13,15 +13,33 @@ export const Ident = {
   prefix: void 0 as string | void,
   register: 1,
 
-  create(prefix?: string) {
+  create(prefix?: string, extra?: string): string {
     let id = ""
-    if (Ident.prefix) id += Ident.prefix + ":"
-    if (prefix) id += prefix + ":"
+    if (Ident.prefix) id += Ident.prefix + "_"
+    if (prefix) id += prefix + "_"
     id += (Ident.register++).toString(36)
     if (Ident.register > Number.MAX_SAFE_INTEGER)
       Ident.register = Number.MIN_SAFE_INTEGER
+    if (extra) id += "(" + extra + ")"
     return id
   },
+}
+
+// finializer registry (for testing/debugging, mostly)
+const _finalizationRegistry = new FinalizationRegistry((heldValue: any) => {
+  logVerbose("🪦 Finalized:", heldValue)
+  _activeReactiveIds.delete(heldValue)
+})
+const _activeReactiveIds: Set<string> = new Set()
+
+//@ts-ignore
+globalThis._pulse_ ||= { setVerbose }
+//@ts-ignore
+globalThis._pulse_.activeReactiveIds = _activeReactiveIds
+
+export const register = (id: string, value: any) => {
+  _finalizationRegistry.register(value, id)
+  _activeReactiveIds.add(id)
 }
 
 /**
@@ -32,6 +50,7 @@ export const Ident = {
  * @template T - The type of the value held by the signal.
  */
 export interface ISignal<T> {
+  readonly id: string
   readonly value: T
   get(): T
   peek(): T
@@ -61,7 +80,7 @@ export interface IMutableSignal<T> extends ISignal<T> {
  * @template T - The type of the value held by the signal.
  */
 export class Signal<T> implements IMutableSignal<T> {
-  readonly id = Ident.create()
+  readonly id = Ident.create("S")
 
   private _value: T
   private _subscriptions = event<T>()
@@ -69,6 +88,7 @@ export class Signal<T> implements IMutableSignal<T> {
 
   constructor(value: T) {
     this._value = value
+    register(this.id, this)
   }
 
   get value(): T {
@@ -84,6 +104,7 @@ export class Signal<T> implements IMutableSignal<T> {
       this._value = newValue
       const dependents = Array.from(this.dependents)
       dependents.forEach((dep) => dep.invalidate())
+
       this._subscriptions.send(newValue)
     }
   }
@@ -99,13 +120,31 @@ export class Signal<T> implements IMutableSignal<T> {
   }
   update(updater: (value: T) => T) {
     const newValue = updater(this._value)
+    if (
+      typeof newValue == "object" &&
+      newValue !== null &&
+      newValue === this._value
+    ) {
+      logVerbose("Signal update returned same value (is this intentional?)")
+    }
     this.set(newValue)
   }
 
   // Add the subscribe method to conform to Svelte's store interface
   subscribe(run: (value: T) => void): () => void {
-    run(this._value)
-    return this._subscriptions(run)
+    const unsubscribe = this._subscriptions(run)
+    try {
+      run(this._value)
+    } catch (error) {
+      logVerbose("Error in signal subscribe", error)
+    }
+    return () => {
+      unsubscribe()
+      // logVerbose("Unsubscribed from signal", this.id, {
+      //   signal: this,
+      //   listener: run,
+      // })
+    }
   }
 }
 
@@ -142,7 +181,7 @@ export function withIdPrefix<T>(id: string | void, worker: () => T) {
  * Represents a computation that runs an effect function and tracks its dependencies.
  */
 export class Computation {
-  readonly id = Ident.create()
+  readonly id = Ident.create("E")
 
   fn: EffectFunction
   dependencies: Set<Signal<any>> = new Set()
@@ -163,6 +202,7 @@ export class Computation {
     this.parentComputation = parentComputation
     this.errorFn = onError || Computation.globalErrorHandler
     this.run()
+    register(this.id, this)
   }
 
   run() {
@@ -188,7 +228,7 @@ export class Computation {
           this.errorFn(error, this)
           exceptionHandled = this.errorFn !== Computation.globalErrorHandler
         } catch (error) {
-          config.verbose && console.error("Error in error handler", error)
+          logVerbose("Error in error handler", error)
         }
       }
       if (!exceptionHandled) {
@@ -227,7 +267,7 @@ export class Computation {
         this._fnCleanup()
         this._fnCleanup = void 0
       } catch (error) {
-        config.verbose && console.error("Cleanup Error:", error)
+        logVerbose("Cleanup Error:", error)
       }
     }
     this.dependencies.forEach((dep) => dep.dependents.delete(this))
@@ -240,7 +280,7 @@ export class Computation {
   }
 
   protected static globalErrorHandler = (error: any, source?: Computation) => {
-    config.verbose && console.error("Unhandled Computation Error:", error)
+    logVerbose("Unhandled Computation Error:", error)
   }
   static setGlobalErrorHandler(handler: (error: any) => void) {
     Computation.globalErrorHandler = handler
@@ -258,7 +298,7 @@ export class Computation {
  * Represents a computed signal that derives its value from a function.
  */
 export class ComputedSignal<T> implements ISignal<T> {
-  readonly id = Ident.create()
+  readonly id = Ident.create("C")
 
   private _signal: Signal<T>
   private _isEvaluated: boolean = false
@@ -275,6 +315,7 @@ export class ComputedSignal<T> implements ISignal<T> {
     if (!lazy) {
       this._evaluate()
     }
+    register(this.id, this)
   }
 
   get value(): T {
@@ -377,7 +418,7 @@ export function untracked(fn: () => void) {
   try {
     fn()
   } catch (error) {
-    config.verbose && console.error("Error in untracked", error)
+    logVerbose("Error in untracked", error)
     throw error
   } finally {
     Computation.current = prevComputation
@@ -504,7 +545,7 @@ export function event<T>(): SparkEvent<T> {
       try {
         callback(detail)
       } catch (error) {
-        config.verbose && console.error("Error in event callback", error)
+        logVerbose("Error in event callback", error)
       }
     })
   }
@@ -512,5 +553,16 @@ export function event<T>(): SparkEvent<T> {
     targets?.clear()
     targets = null
   }
-  return Object.assign(subscribe, { send, clear })
+  const api = Object.assign(subscribe, {
+    send,
+    clear,
+  })
+  Object.defineProperty(api, "size", { get: () => targets?.size || 0 })
+  return api
+}
+
+function logVerbose(...messages: any) {
+  if (config.verbose) {
+    console.warn("[Pulse]", ...messages)
+  }
 }

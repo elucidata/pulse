@@ -4,11 +4,14 @@ import { render } from "../view"
 import { render as renderLegacy } from "../view-legacy"
 
 export const PulseComponent = React.memo(function PulseTNGComponent({
+  className,
   component,
-  props,
+  props = {},
+  ...rest
 }: {
+  className?: string
   component: (...args: any[]) => any // TODO: Fix this type
-  props: any
+  props?: any
 }) {
   const divRef = React.useRef<HTMLDivElement | null>(null)
   const disposeRef = React.useRef<Function | null>(null)
@@ -23,11 +26,13 @@ export const PulseComponent = React.memo(function PulseTNGComponent({
   )
 
   return React.createElement("div", {
+    className,
     style: { display: "contents" },
     ref: (div: HTMLDivElement | null): void => {
       if (!div) return
       divRef.current = div
       if (disposeRef.current) return
+      props = { ...props, ...rest }
       disposeRef.current = render(component(props), div)
     },
   })

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test"
 import {
   View,
-  activeRoots,
+  _activeRoots,
   each,
   getEnv,
   live,
@@ -14,7 +14,7 @@ import {
   view,
   when,
 } from "./internals"
-import { signal, setVerbose } from "../internals"
+import { signal, setVerbose, computed } from "../internals"
 
 export const getHTML = (node: Node | Node[]) => {
   const div = document.createElement("div")
@@ -49,9 +49,9 @@ describe("View", () => {
     const dispose = render(Test(), document.body)
     expect(View.active).toBeNull()
 
-    expect(activeRoots.size).toEqual(1)
+    expect(_activeRoots.size).toEqual(1)
     dispose()
-    expect(activeRoots.size).toEqual(0)
+    expect(_activeRoots.size).toEqual(0)
   })
 
   it("Should render simple HTML elements", () => {
@@ -69,11 +69,11 @@ describe("View", () => {
     expect(getHTML(output.dom)).toEqual("<div>Hello World</div>")
 
     const remove = render(Test(), document.body)
-    expect(activeRoots.size).toEqual(1)
+    expect(_activeRoots.size).toEqual(1)
     expect(document.body.innerHTML).toContain("Hello World")
     remove()
     expect(document.body.innerHTML).toEqual("")
-    expect(activeRoots.size).toEqual(0)
+    expect(_activeRoots.size).toEqual(0)
   })
 
   it("Should render HTML elements with attributes", () => {
@@ -291,9 +291,9 @@ describe("View", () => {
   })
 
   it("Should support designed elements", () => {
-    const Warning = tags.div.design.css`
+    const Warning = tags.div.extend(`
       color: red;
-    ` // ``
+    `)
     const MyComponent = view(() => {
       tags.div({ class: "test" }, () => {
         Warning(() => text("Hello"))
@@ -310,12 +310,12 @@ describe("View", () => {
   })
 
   it("Should designed elements that are designable", () => {
-    const Message = tags.div.design.css`
+    const Message = tags.div.extend(`
       padding: 1rem;
-    ` // ``
-    const Warning = Message.design.css`
+    `)
+    const Warning = Message.extend(`
       color: red;
-    ` // ``
+    `)
     const MyComponent = view(() => {
       tags.div({ class: "test" }, () => {
         Warning(() => text("Hello"))
@@ -333,9 +333,7 @@ describe("View", () => {
   })
 
   it("Should support designed elements with alt syntax", () => {
-    const Warning = tags.div.design.css(/* css */ `
-      color: red;
-    `) // `
+    const Warning = tags.div.extend({ color: "red" })
     const MyComponent = view(() => {
       tags.div({ class: "test" }, () => {
         Warning(() => text("Hello"))
@@ -368,7 +366,7 @@ describe("View", () => {
     const btn = Button()
     expect(btn).toBeDefined()
     // Default Modifiers
-    expect(btn.style).toBeDefined()
+    expect(btn.css).toBeDefined()
     expect(btn.transitionName).toBeDefined()
     // custom modifiers
     expect(btn.outlined).toBeDefined()
@@ -818,4 +816,56 @@ describe("View", () => {
     remove()
     setVerbose(false)
   })
+
+  it("should properly insert new items in `each` block", () => {
+    let items = signal([
+      signal({ id: "1", name: "one" }),
+      signal({ id: "2", name: "two" }),
+      signal({ id: "3", name: "three" }),
+    ])
+    const MyComponent = view(() => {
+      tags.div({ class: "List" }, () => {
+        each(
+          items,
+          (item) => {
+            tags.div(() => get(() => item.value.name))
+          },
+          (item) => item.peek().id
+        )
+      })
+    })
+
+    const dispose = render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("one")
+    let ids: string[]
+
+    ids = extractIdsFromEachItems(document.body.innerHTML)
+    // console.log(document.body.innerHTML)
+    expect(ids).toEqual(["1", "2", "3"])
+
+    items.set([...items.peek(), signal({ id: "4", name: "four" })])
+
+    ids = extractIdsFromEachItems(document.body.innerHTML)
+    // console.log(ids)
+    // console.log(document.body.innerHTML)
+    expect(ids).toEqual(["1", "2", "3", "4"])
+
+    items.set([signal({ id: "0", name: "zero" }), ...items.peek()])
+    ids = extractIdsFromEachItems(document.body.innerHTML)
+    expect(ids).toEqual(["0", "1", "2", "3", "4"])
+
+    dispose()
+  })
 })
+
+export const extractIdsFromEachItems = (html: string) => {
+  // extract each-item comments in the order of the items in the string
+  const comments = html.match(/<!--each-item_.*?-->/g)
+  // for each comment, extract the id from the comment which are the values within parenthesis in the comment
+  const ids = comments?.map((comment) => comment.match(/\((.*?)\)/)?.[1])
+  return ids
+}
+export const get = (selector: () => any) => {
+  const value = computed(() => selector())
+  return value
+}

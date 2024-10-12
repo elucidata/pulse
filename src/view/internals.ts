@@ -7,6 +7,9 @@ import {
   isMutableSignal,
   Ident,
   withIdPrefix,
+  computed,
+  register,
+  Computation,
 } from "../internals"
 import {
   css as cssTemplate,
@@ -15,13 +18,10 @@ import {
   classNames,
 } from "./css"
 
-// export * from "../internals"
-
-export const viewRegistry = new Map<string, any>()
-//@ts-ignore
-globalThis.pulseViewRegistry = viewRegistry
+export const PulseViewFactory = Symbol("PulseViewFactory")
 
 export interface ViewFactory<P> {
+  [PulseViewFactory]: true
   (): View<P>
   (props: P): View<P>
   (children: Children): View<P>
@@ -29,7 +29,17 @@ export interface ViewFactory<P> {
   styles(css: string): ViewFactory<P>
 }
 
-export type Children = () => void | string | number | ISignal<any>
+export type Children = () =>
+  | void
+  | string
+  | number
+  | ISignal<string | number>
+  | any // technically you can return anything, but anything not listed is ignored
+export type RenderableChildren = () =>
+  | void
+  | string
+  | number
+  | ISignal<string | number>
 
 export type ViewHooks = {
   onDispose: (callback: Function) => void
@@ -41,14 +51,6 @@ export type DomBuilder<P = any> = (
   api: ViewHooks
 ) => void
 
-export interface Designable<M> {
-  design: {
-    css(
-      styles: TemplateStringsArray | string,
-      ...args: any[]
-    ): ElementBuilder<any, M, any> & Designable<M>
-  }
-}
 export interface CssRecord {
   [property: string]: string | number | CssRecord | Partial<CSSStyleDeclaration>
 }
@@ -61,15 +63,13 @@ export type ElementBuilder<P, M, E extends HTMLElement> = {
   (children: Children): ElementModifiers<M, E>
   (): ElementModifiers<M, E>
 
-  extend(css: CustomCSS): ElementBuilder<P, M, E> & Designable<M>
-  extend<N>(
-    modifiers: ModifierBuilder<N, E>
-  ): ElementBuilder<P, M & N, E> & Designable<M & N>
+  extend(css: CustomCSS): ElementBuilder<P, M, E>
+  extend<N>(modifiers: ModifierBuilder<N, E>): ElementBuilder<P, M & N, E>
   extend<N>(
     css: CustomCSS,
     modifiers: ModifierBuilder<N, E>
-  ): ElementBuilder<P, M & N, E> & Designable<M & N>
-} & Designable<M>
+  ): ElementBuilder<P, M & N, E>
+}
 
 export type ModifierBuilder<N, E extends HTMLElement> = (
   modifiers: BaseModifiers<E>,
@@ -87,11 +87,35 @@ export type ModifierBuilderContext<E = HTMLElement> = {
 }
 
 export type BaseModifiers<E extends HTMLElement> = {
-  classNames: (...args: any[]) => BaseModifiers<E>
+  /**
+   * Adds a class name to the element.
+   */
+  className: (...args: any[]) => BaseModifiers<E>
+  /**
+   * Adds a style to the element.
+   */
+  css: (styles: CustomStyleCSS) => BaseModifiers<E>
+  /**
+   * Sets the element as `inert` (not interactive).
+   */
   inert: (freeze?: ReactiveValue<boolean>) => BaseModifiers<E>
-  style: (styles: CustomStyleCSS) => BaseModifiers<E>
+  /**
+   * Adds an event listener to the element that's automatically cleaned up.
+   */
+  on: (
+    event: keyof HTMLElementEventMap,
+    callback: (e: Event | CustomEvent) => void
+  ) => BaseModifiers<E>
+  /**
+   * Sets the element's transition name. (Used for animations)
+   */
   transitionName: (name: string) => BaseModifiers<E>
-  use: (callback: (element: E) => void) => BaseModifiers<E>
+  /**
+   * Applies a directive to the element.
+   */
+  use: (
+    callback: (element: E, helpers: ModifierBuilderContext<E>) => void
+  ) => BaseModifiers<E>
 }
 
 export type ElementModifiers<M, E extends HTMLElement> = Chainable<
@@ -116,9 +140,25 @@ export const NOOP = () => {}
 export const EMPTY_PROPS = {}
 export const EMPTY_CHILDREN: Children = NOOP
 
-export const activeRoots = new Set<View<any>>()
+export const _activeRoots = new Set<View<any>>()
+// export const _viewRegistry = new Map<string, any>()
 
-function logVerbose(...messages: any) {
+//@ts-ignore
+globalThis._pulse_ ||= {}
+//@ts-ignore
+globalThis._pulse_.activeRenderRoots = _activeRoots
+//@ts-ignore
+// globalThis._pulse_.viewRegistry = _viewRegistry
+
+export const registerView = (key: string, view: any) => {
+  register(key, view)
+  // _viewRegistry.set(key, view)
+}
+export const unregisterView = (key: string) => {
+  // _viewRegistry.delete(key)
+}
+
+export function logVerbose(...messages: any) {
   if (config.verbose) {
     console.warn("[Pulse View]", ...messages)
   }
@@ -148,6 +188,7 @@ export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
       })
     } as ViewFactory<P>,
     {
+      [PulseViewFactory]: true,
       styles(css: string) {
         applyStylesToDOM(css)
         return this
@@ -157,7 +198,7 @@ export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
 }
 
 export class View<P> {
-  readonly id = Ident.create()
+  readonly id = Ident.create("V")
   readonly dom: DocumentFragment
   readonly parent: View<any> | null = null
   readonly children: Set<View<any>> = new Set()
@@ -166,7 +207,7 @@ export class View<P> {
   env?: Map<string, any>
 
   constructor(private _builder: DomBuilder, args: any[]) {
-    viewRegistry.set(this.id, this)
+    registerView(this.id, this)
     this.parent = View.active
     if (this.parent) {
       this.parent.children.add(this)
@@ -187,24 +228,21 @@ export class View<P> {
       }
     } catch (error) {
       logVerbose("Error in View builder: ", error)
-      const { startMarker, endMarker } = createRenderMarkers(`view:${this.id}`)
+      const viewMarkers = createRenderMarkers(`view:${this.id}`)
 
       // clear the dom
       this.dom = document.createDocumentFragment()
 
       if (View.activeElement) {
-        View.activeElement.appendChild(startMarker)
-        View.activeElement.appendChild(endMarker)
+        viewMarkers.appendTo(View.activeElement)
       } else if (this.parent) {
-        this.parent.dom.appendChild(startMarker)
-        this.parent.dom.appendChild(endMarker)
+        viewMarkers.appendTo(this.parent.dom)
       } else {
-        this.dom.appendChild(startMarker)
-        this.dom.appendChild(endMarker)
+        viewMarkers.appendTo(this.dom)
       }
 
       // Display error message between markers
-      displayError(startMarker!, endMarker!, error)
+      displayErrorWithinMarkers(viewMarkers, error)
     }
   }
 
@@ -256,7 +294,7 @@ export class View<P> {
     if (this.parent) {
       this.parent.children.delete(this)
     }
-    viewRegistry.delete(this.id)
+    unregisterView(this.id)
   }
 
   static active: View<any> | null = null
@@ -374,6 +412,11 @@ export function onDispose(callback: Function) {
   }
 }
 
+export type Truthy = string | number | boolean | null | undefined
+export function isTruthy(value: Truthy): boolean {
+  return !!value
+}
+
 /**
  * Conditionally renders a view based on a boolean condition.
  *
@@ -382,7 +425,7 @@ export function onDispose(callback: Function) {
  * @param elseBuilder (optional) When the condition is false, this function is called to build the view, otherwise it is skipped/torn down.
  */
 export function when(
-  condition: ISignal<boolean> | boolean | (() => boolean | ISignal<boolean>),
+  condition: ISignal<Truthy> | Truthy | (() => Truthy | ISignal<Truthy>),
   thenBuilder: () => void,
   elseBuilder?: () => void
 ) {
@@ -390,16 +433,13 @@ export function when(
   const activeView = View.active
   const activeElement = View.activeElement
 
-  const { startMarker, endMarker } = createRenderMarkers(id)
+  const whenMarkers = createRenderMarkers(id)
   if (activeElement) {
-    activeElement.appendChild(startMarker)
-    activeElement.appendChild(endMarker)
+    whenMarkers.appendTo(activeElement)
   } else if (activeView) {
-    activeView.dom.appendChild(startMarker)
-    activeView.dom.appendChild(endMarker)
+    whenMarkers.appendTo(activeView.dom)
   } else {
-    logVerbose("when(): No active view to append markers")
-    return
+    return logVerbose("when(): No active view to append markers")
   }
 
   let container: DocumentFragment | null = null
@@ -417,21 +457,11 @@ export function when(
 
   effect(
     () => {
-      let runThenBuilder: boolean | ISignal<boolean> = false
-      if (isSignal(condition)) {
-        runThenBuilder = condition.value
-      } else if (typeof condition === "boolean") {
-        runThenBuilder = condition
-      } else {
-        runThenBuilder = condition()
-      }
-      if (isSignal(runThenBuilder)) {
-        runThenBuilder = runThenBuilder.value
-      }
+      let runThenBuilder: boolean = processCondition(condition)
 
       if (hasError) {
         try {
-          removeBetweenMarkers(startMarker, endMarker)
+          removeBetweenMarkers(whenMarkers)
           hasError = false
         } catch (error) {
           logVerbose("Error removing 'when' error content:", error)
@@ -440,7 +470,7 @@ export function when(
 
       if (container) {
         try {
-          removeBetweenMarkers(startMarker, endMarker)
+          removeBetweenMarkers(whenMarkers)
           container = null
         } catch (error) {
           logVerbose("Error removing 'when' content:", error)
@@ -462,22 +492,48 @@ export function when(
           })
         })
 
-        insertBetweenMarkers(container, startMarker, endMarker)
+        insertBetweenMarkers(container, whenMarkers)
       } catch (error) {
         logVerbose("Error in 'when' builder:", error)
-        removeBetweenMarkers(startMarker, endMarker)
-        displayError(startMarker, endMarker, error)
+        removeBetweenMarkers(whenMarkers)
+        displayErrorWithinMarkers(whenMarkers, error)
         container = null
         hasError = true
       }
     },
     (err) => {
       logVerbose("Error in 'when' effect:", err)
-      removeBetweenMarkers(startMarker, endMarker)
-      displayError(startMarker, endMarker, err)
+      removeBetweenMarkers(whenMarkers)
+      displayErrorWithinMarkers(whenMarkers, err)
       hasError = true
     }
   )
+}
+
+export function processCondition(
+  condition:
+    | string
+    | number
+    | boolean
+    | ISignal<Truthy>
+    | (() => Truthy | ISignal<Truthy>)
+    | null
+    | undefined
+): boolean {
+  let runThenBuilder: boolean = false
+  if (isSignal(condition)) {
+    runThenBuilder = isTruthy(condition.value)
+  } else if (isFunction(condition)) {
+    const result = condition()
+    if (isSignal(result)) {
+      runThenBuilder = isTruthy(result.value)
+    } else {
+      runThenBuilder = isTruthy(result)
+    }
+  } else {
+    runThenBuilder = isTruthy(condition)
+  }
+  return runThenBuilder
 }
 
 /**
@@ -492,16 +548,13 @@ export function live(builder: () => void) {
   const activeView = View.active
   const activeElement = View.activeElement
 
-  const { startMarker, endMarker } = createRenderMarkers(id)
+  const liveMarkers = createRenderMarkers(id)
   if (activeElement) {
-    activeElement.appendChild(startMarker)
-    activeElement.appendChild(endMarker)
+    liveMarkers.appendTo(activeElement)
   } else if (activeView) {
-    activeView.dom.appendChild(startMarker)
-    activeView.dom.appendChild(endMarker)
+    liveMarkers.appendTo(activeView.dom)
   } else {
-    logVerbose("live(): No active view to append markers")
-    return
+    return logVerbose("live(): No active view to append markers")
   }
 
   let container: DocumentFragment | null = null
@@ -511,7 +564,7 @@ export function live(builder: () => void) {
   effect(() => {
     if (hasError) {
       try {
-        removeBetweenMarkers(startMarker, endMarker)
+        removeBetweenMarkers(liveMarkers)
         hasError = false
       } catch (error) {
         logVerbose("Error removing 'live' error content:", error)
@@ -520,7 +573,7 @@ export function live(builder: () => void) {
 
     if (container) {
       try {
-        removeBetweenMarkers(startMarker, endMarker)
+        removeBetweenMarkers(liveMarkers)
         container = null
       } catch (error) {
         logVerbose("Error removing 'live' content:", error)
@@ -537,10 +590,10 @@ export function live(builder: () => void) {
     try {
       View.inRenderContext(boundary, container, builder)
 
-      insertBetweenMarkers(container, startMarker, endMarker)
+      insertBetweenMarkers(container, liveMarkers)
     } catch (error) {
       logVerbose("Error in 'live' builder:", error)
-      displayError(startMarker, endMarker, error)
+      displayErrorWithinMarkers(liveMarkers, error)
       hasError = true
     }
   })
@@ -553,21 +606,20 @@ export function live(builder: () => void) {
 export function text(value: string | number | ISignal<any>) {
   if (isSignal(value)) {
     const id = Ident.create("text")
-    const { startMarker, endMarker } = createRenderMarkers(id)
+    const textMarkers = createRenderMarkers(id)
 
-    View.appendToActiveElements(startMarker, endMarker)
-    const disposeLiveText = effect(() => {
-      const textValue = value.value
-      removeBetweenMarkers(startMarker, endMarker)
+    View.appendToActiveElements(textMarkers.start, textMarkers.end)
+    const disposeLiveText = value.subscribe((val) => {
+      const textValue = val
+      removeBetweenMarkers(textMarkers)
       insertBetweenMarkers(
         document.createTextNode(String(textValue)),
-        startMarker,
-        endMarker
+        textMarkers
       )
     })
     View.active?.hooks.onDispose(() => {
       disposeLiveText()
-      removeBetweenMarkers(startMarker, endMarker)
+      removeBetweenMarkers(textMarkers)
     })
     return
   }
@@ -594,8 +646,7 @@ export function raw(html: TemplateStringsArray | string, ...args: any[]) {
 export type KeyedView<T> = {
   key: any
   view: View<any>
-  startMarker: Comment
-  endMarker: Comment
+  markers: DOMMarkers
 }
 
 /**
@@ -614,16 +665,15 @@ export function each<T>(
   const parentView = View.active
   const parentElement = View.activeElement
 
-  const { startMarker, endMarker } = createRenderMarkers(id)
+  const currentComputaiton = Computation.current
+
+  const eachMarkers = createRenderMarkers(id)
   if (parentElement) {
-    parentElement.appendChild(startMarker)
-    parentElement.appendChild(endMarker)
+    eachMarkers.appendTo(parentElement)
   } else if (parentView) {
-    parentView.dom.appendChild(startMarker)
-    parentView.dom.appendChild(endMarker)
+    eachMarkers.appendTo(parentView.dom)
   } else {
-    logVerbose("each(): No active view to append markers")
-    return
+    return logVerbose("each(): No active view to append markers")
   }
 
   let hasWarnedAboutKeyExtractor = false
@@ -632,22 +682,28 @@ export function each<T>(
   let boundary = View.createBoundary()
   let keyedViews = new Map<any, KeyedView<T>>()
 
-  const disposeEffect = effect(
-    () => {
+  const sourceCom = computed(() => {
+    return getValue(list)
+  })
+
+  const renderList = (source: T[] | Iterable<T>) => {
+    try {
       if (hasError) {
         try {
-          removeBetweenMarkers(startMarker, endMarker)
+          removeBetweenMarkers(eachMarkers)
           hasError = false
         } catch (error) {
           logVerbose("Error removing 'each' error content:", error)
         }
       }
 
-      const source = getValue(list)
       let currentList = isIterable(source) ? Array.from(source) : source
 
       if (!Array.isArray(currentList)) {
-        logVerbose("each(): Provided list is not an array", currentList)
+        logVerbose(
+          "each(): Provided list parameter is not an array",
+          currentList
+        )
         currentList = []
       }
 
@@ -655,7 +711,7 @@ export function each<T>(
       const fragment = document.createDocumentFragment()
 
       for (const [index, item] of currentList.entries()) {
-        let key: any = getKeyForItem<T>(index, keyExtractor, item)
+        let key = getKeyForItem<T>(index, keyExtractor, item)
 
         if (config.verbose && key === index && !hasWarnedAboutKeyExtractor) {
           console.warn(
@@ -668,25 +724,26 @@ export function each<T>(
 
         if (!keyedView) {
           const subview = View.createBoundary(boundary, boundary.dom)
-          const viewId = Ident.create("each-item")
-          const { startMarker: viewStart, endMarker: viewEnd } =
-            createRenderMarkers(viewId)
+          const viewId = Ident.create("each-item", key)
+          const subviewMarkers = createRenderMarkers(viewId)
           const viewFragment = document.createDocumentFragment()
 
-          viewFragment.appendChild(viewStart)
+          viewFragment.appendChild(subviewMarkers.start)
 
-          View.inRenderContext(subview, subview.dom, () =>
+          const prevComputation = Computation.current
+          View.inRenderContext(subview, subview.dom, () => {
+            Computation.current = currentComputaiton
             itemBuilder(item, index)
-          )
+          })
+          Computation.current = prevComputation
 
           viewFragment.appendChild(subview.dom)
-          viewFragment.appendChild(viewEnd)
+          viewFragment.appendChild(subviewMarkers.end)
 
           keyedView = {
             key,
             view: subview,
-            startMarker: viewStart,
-            endMarker: viewEnd,
+            markers: subviewMarkers,
           }
           fragment.appendChild(viewFragment)
         } // else a view already exists for this key, no need to rebuild
@@ -696,8 +753,7 @@ export function each<T>(
 
       if (firstRun) {
         // First run, just insert the fragment
-        removeBetweenMarkers(startMarker, endMarker)
-        insertBetweenMarkers(fragment, startMarker, endMarker)
+        insertBetweenMarkers(fragment, eachMarkers)
 
         firstRun = false
       } else {
@@ -705,33 +761,42 @@ export function each<T>(
         for (const [key, keyedView] of keyedViews) {
           if (!newKeyedViews.has(key)) {
             keyedView.view.dispose()
-            removeBetweenMarkers(keyedView.startMarker, keyedView.endMarker)
+            removeBetweenMarkers(keyedView.markers)
+            keyedView.markers.remove()
           }
         }
 
         // Rearrange the nodes to match the new order
-        const parentNode = startMarker.parentNode
+        const parentNode = eachMarkers.start.parentNode
         if (parentNode) {
-          let referenceNode = startMarker.nextSibling
+          let referenceNode = eachMarkers.start.nextSibling
 
           for (const keyedView of newKeyedViews.values()) {
-            const { startMarker, endMarker } = keyedView
-
-            // Check if the node is already in the correct position
-            if (referenceNode === startMarker) {
+            if (!keyedView.markers.start.isConnected) {
+              // logVerbose("Keyed view is not connected, inserting...", keyedView)
+              // This is a new view, insert its nodes
+              const nodesToInsert = extractNodesIncludingMarkers(
+                keyedView.markers
+              )
+              parentNode.insertBefore(nodesToInsert, referenceNode)
+            } else if (referenceNode === keyedView.markers.start) {
+              // logVerbose(
+              //   "Keyed view is already in the correct position",
+              //   keyedView
+              // )
               // Nodes are already in the correct position
-              referenceNode = endMarker.nextSibling
+              referenceNode = keyedView.markers.end.nextSibling
             } else {
+              // logVerbose("Keyed view needs to be moved", keyedView)
               // Move the nodes to the correct position
               const nodesToMove = extractNodesIncludingMarkers(
-                startMarker,
-                endMarker
+                keyedView.markers
               )
               parentNode.insertBefore(nodesToMove, referenceNode)
             }
 
             // Update referenceNode to the next node after the inserted nodes
-            referenceNode = endMarker.nextSibling
+            referenceNode = keyedView.markers.end.nextSibling // eachMarkers.end.nextSibling
           }
         } else {
           console.warn("Parent node not found for 'each' content")
@@ -740,14 +805,17 @@ export function each<T>(
 
       // Update keyedViews to the new set
       keyedViews = newKeyedViews
-    },
-    (error) => {
+    } catch (error) {
       logVerbose("Error in 'each' effect:", error)
-      removeBetweenMarkers(startMarker, endMarker)
-      displayError(startMarker, endMarker, error)
+      removeBetweenMarkers(eachMarkers)
+      displayErrorWithinMarkers(eachMarkers, error)
       hasError = true
     }
-  )
+  }
+
+  const disposeEffect = sourceCom.subscribe((list) => {
+    renderList(list)
+  })
 
   if (parentView) {
     parentView.hooks.onDispose(() => {
@@ -777,7 +845,14 @@ export const tags: {
         class: string | ISignal<string>
         style: Partial<CSSStyleDeclaration> | string //| ISignal<string>
         ref: (el: HTMLElement) => void
-        use: (el: HTMLElement) => void
+        on: (
+          event: keyof HTMLElementEventMap,
+          callback: (e: Event | CustomEvent) => void
+        ) => void
+        use: (
+          el: HTMLElement,
+          helpers: ModifierBuilderContext<HTMLElementTagNameMap[key]>
+        ) => void
         key: any
         switch: boolean | ISignal<boolean> // Safari-only for now
         $value: ISignal<any>
@@ -834,21 +909,12 @@ export function createElement<P = any, M = {}>(
       )
     },
     {
-      design: {
-        css: (styles: TemplateStringsArray | string, ...args: any[]) => {
-          const src = typeof styles === "string" ? [styles] : styles
-          const css = withAutoScope(() => cssTemplate(src as any, ...args))
-          return createElement<P, M>(tag, [css, ...classNames], modifiers)
-        },
-      },
-
       extend<N>(
         cssOrModifiers:
           | (Partial<CSSStyleDeclaration> & CustomCSS)
           | ModifierBuilder<N, HTMLElementTagNameMap[typeof tag]>,
         newModifiers?: ModifierBuilder<N, HTMLElementTagNameMap[typeof tag]>
-      ): ElementBuilder<P, M & N, HTMLElementTagNameMap[typeof tag]> &
-        Designable<M & N> {
+      ): ElementBuilder<P, M & N, HTMLElementTagNameMap[typeof tag]> {
         const cssString =
           typeof cssOrModifiers === "string"
             ? cssOrModifiers
@@ -894,7 +960,7 @@ export function createElement<P = any, M = {}>(
           combinedModifiers
         )
       },
-    } as Designable<M>
+    }
   ) as ElementBuilder<P, M, HTMLElementTagNameMap[typeof tag]>
   return elementFn
 }
@@ -934,13 +1000,13 @@ export function convertToNestedCss(
  * @returns A function that can be called to dispose of the view
  */
 export function render(viewInstance: View<any>, target: HTMLElement) {
-  const id = Ident.create("pulse")
-  const { startMarker, endMarker } = createRenderMarkers(id)
+  let id = Ident.create("pulse")
+  let renderMarkers = createRenderMarkers(id)
 
-  activeRoots.add(viewInstance)
+  _activeRoots.add(viewInstance)
 
-  target.appendChild(startMarker)
-  const source = viewInstance.dom
+  target.appendChild(renderMarkers.start)
+  let source = viewInstance.dom
   if (Array.isArray(source)) {
     for (const el of source) {
       target.appendChild(el)
@@ -948,17 +1014,22 @@ export function render(viewInstance: View<any>, target: HTMLElement) {
   } else {
     target.appendChild(source)
   }
-  target.appendChild(endMarker)
+  target.appendChild(renderMarkers.end)
 
   let isDisposed = false
   return () => {
     if (isDisposed) return
     viewInstance.dispose()
-    removeBetweenMarkers(startMarker, endMarker)
-    target.removeChild(startMarker)
-    target.removeChild(endMarker)
-    activeRoots.delete(viewInstance)
+    removeBetweenMarkers(renderMarkers)
+    renderMarkers.remove()
+    _activeRoots.delete(viewInstance)
     isDisposed = true
+    //@ts-ignore
+    renderMarkers = void 0
+    //@ts-ignore
+    source = void 0
+    //@ts-ignore
+    target = void 0
   }
 }
 
@@ -969,7 +1040,6 @@ export function element<P, M, E extends HTMLElement>(
   customClasses: string[] = [],
   customModifiers?: ModifierBuilder<M, E>
 ): ElementModifiers<M, E> {
-  // const activeView = View.active
   const el: E = document.createElement(name) as E
 
   if (typeof props === "function") {
@@ -1076,13 +1146,16 @@ export function element<P, M, E extends HTMLElement>(
     if (resultType === "string" || resultType === "number") {
       el.appendChild(document.createTextNode(String(result)))
     } else if (isSignal(result)) {
-      const disposeLiveChildren = effect(() => {
-        const value = result.value
+      const disposeLiveChildren = result.subscribe((val) => {
+        const value = val
         el.textContent = String(value)
       })
       View.active?.hooks.onDispose(disposeLiveChildren)
     } else if (resultType != "undefined") {
-      logVerbose("Invalid children", result)
+      logVerbose("Invalid children (ignoring)", {
+        element: { name, el },
+        result,
+      })
     }
   })
 
@@ -1090,24 +1163,7 @@ export function element<P, M, E extends HTMLElement>(
 
   if (customModifiers) {
     let extraModifiers = {} as M
-    const context = {
-      element: el,
-      onDispose: (callback: Function) => {
-        View.active?.hooks.onDispose(callback)
-      },
-      bindValue: <T>(
-        value: ReactiveValue<T>,
-        callback: ReactiveCallback<T>
-      ) => {
-        View.active?.hooks.onDispose(bindValue(value, callback))
-      },
-      bindEvent: <T extends keyof HTMLElementEventMap>(
-        event: T,
-        callback: (e: HTMLElementEventMap[T]) => void
-      ) => {
-        View.active?.hooks.onDispose(bindEvent(el, event, callback))
-      },
-    }
+    const context = createModifierContext<E>(el)
 
     extraModifiers = customModifiers(modifiers, context)
     modifiers = Object.assign(modifiers, extraModifiers)
@@ -1117,20 +1173,34 @@ export function element<P, M, E extends HTMLElement>(
   return chainableModifiers as ElementModifiers<M, E>
 }
 
+export function createModifierContext<E extends HTMLElement>(el: E) {
+  return {
+    element: el,
+    onDispose: (callback: Function) => {
+      View.active?.hooks.onDispose(callback)
+    },
+    bindValue: <T>(value: ReactiveValue<T>, callback: ReactiveCallback<T>) => {
+      const dispose = bindValue(value, callback)
+      View.active?.hooks.onDispose(dispose)
+    },
+    bindEvent: <T extends keyof HTMLElementEventMap>(
+      event: T,
+      callback: (e: HTMLElementEventMap[T]) => void
+    ) => {
+      const dispose = bindEvent(el, event, callback)
+      View.active?.hooks.onDispose(dispose)
+    },
+  } as ModifierBuilderContext<E>
+}
+
 export function createBaseModifiers<T extends HTMLElement>(el: T) {
   const modifiers = {
-    classNames: (...args: any[]) => {
+    className: (...args: any[]) => {
       const classes = classNames(...args)
       el.classList.add(classes)
       return modifiers
     },
-    inert(freeze?: ReactiveValue<boolean>) {
-      bindValue(freeze, (value) => {
-        el.toggleAttribute("inert", value)
-      })
-      return modifiers
-    },
-    style: (styles: CustomStyleCSS) => {
+    css: (styles: CustomStyleCSS) => {
       const currentStyles = el.getAttribute("style") || ""
       if (typeof styles === "string") {
         el.style.cssText = currentStyles + styles
@@ -1139,13 +1209,31 @@ export function createBaseModifiers<T extends HTMLElement>(el: T) {
       }
       return modifiers
     },
+    inert(freeze?: ReactiveValue<boolean>) {
+      const dispose = bindValue(freeze, (value) => {
+        el.toggleAttribute("inert", value)
+      })
+      View.active?.hooks.onDispose(dispose)
+      return modifiers
+    },
+    on(
+      event: keyof HTMLElementEventMap,
+      callback: (e: Event | CustomEvent) => void
+    ) {
+      el.addEventListener(event, callback)
+      View.active?.hooks.onDispose(() => {
+        el.removeEventListener(event, callback)
+      })
+      return modifiers
+    },
     transitionName(name: string) {
       //@ts-ignore
       el.style.viewTransitionName = name
       return modifiers
     },
-    use(callback: (element: T) => void) {
-      const dispose = callback(el)
+    use(callback: (element: T, context: ModifierBuilderContext<T>) => void) {
+      const ctx = createModifierContext(el)
+      const dispose = callback(el, ctx)
       if (typeof dispose === "function") View.active?.hooks.onDispose(dispose)
       return modifiers
     },
@@ -1155,8 +1243,8 @@ export function createBaseModifiers<T extends HTMLElement>(el: T) {
 
 export function setElAttr(el: Element, key: string, value: any) {
   if (isSignal(value)) {
-    const disposeLiveAttr = effect(() => {
-      el.setAttribute(key, String(value.value))
+    const disposeLiveAttr = value.subscribe((val) => {
+      el.setAttribute(key, String(val))
     })
     View.active?.hooks.onDispose(disposeLiveAttr)
   } else {
@@ -1165,8 +1253,8 @@ export function setElAttr(el: Element, key: string, value: any) {
 }
 export function setElProp(el: Element, key: string, value: any) {
   if (isSignal(value)) {
-    const disposeLiveAttr = effect(() => {
-      ;(el as any)[key] = value.value
+    const disposeLiveAttr = value.subscribe((val) => {
+      ;(el as any)[key] = val
     })
     View.active?.hooks.onDispose(disposeLiveAttr)
   } else {
@@ -1185,48 +1273,53 @@ export function extractPropsAndChildren<P>(args: any[]): [P, Children] {
 }
 
 export function createRenderMarkers(id: string) {
-  const startMarker = document.createComment(id)
-  const endMarker = document.createComment(`/${id}`)
-  return { startMarker, endMarker }
+  return {
+    start: document.createComment(id),
+    end: document.createComment(`/${id}`),
+    appendTo(parent: Node) {
+      parent.appendChild(this.start)
+      parent.appendChild(this.end)
+    },
+    remove() {
+      this.start.remove()
+      this.end.remove()
+    },
+  }
 }
+export type DOMMarkers = ReturnType<typeof createRenderMarkers>
 
-export function insertBetweenMarkers(node: Node, start: Comment, end: Comment) {
-  if (end.parentNode) {
-    end.parentNode.insertBefore(node, end)
+export function insertBetweenMarkers(node: Node, markers: DOMMarkers) {
+  if (markers.end.parentNode) {
+    markers.end.parentNode.insertBefore(node, markers.end)
   }
 }
 
-export function removeBetweenMarkers(start: Comment, end: Comment) {
-  if (start.isConnected) {
+export function removeBetweenMarkers(markers: DOMMarkers) {
+  if (markers.start.isConnected) {
     const range = document.createRange()
-    range.setStartAfter(start)
-    range.setEndBefore(end)
+    range.setStartAfter(markers.start)
+    range.setEndBefore(markers.end)
     range.deleteContents()
   }
 }
 
 export function extractNodesIncludingMarkers(
-  startNode: Node,
-  endNode: Node
+  markers: DOMMarkers
 ): DocumentFragment {
   const fragment = document.createDocumentFragment()
-  let currentNode: Node | null = startNode
+  let currentNode: Node | null = markers.start
 
   while (currentNode) {
     const nextNode: Node | null = currentNode.nextSibling
     fragment.appendChild(currentNode)
-    if (currentNode === endNode) break
+    if (currentNode === markers.end) break
     currentNode = nextNode
   }
 
   return fragment
 }
 
-export function displayError(
-  startMarker: Comment,
-  endMarker: Comment,
-  error: any
-) {
+export function displayErrorWithinMarkers(markers: DOMMarkers, error: any) {
   const errorMessage = document.createElement("div")
   Object.assign(errorMessage.style, {
     color: "white",
@@ -1241,7 +1334,7 @@ export function displayError(
     error instanceof Error ? error.message : String(error)
   }`
 
-  insertBetweenMarkers(errorMessage, startMarker, endMarker)
+  insertBetweenMarkers(errorMessage, markers)
 }
 
 export function makeChainable<T extends object>(obj: T): Chainable<T> {
@@ -1260,19 +1353,33 @@ export function makeChainable<T extends object>(obj: T): Chainable<T> {
   return chainableObj
 }
 
-export type ReactiveValue<T> = T | ISignal<T>
+/**
+ * A value, signal, or function that can be used to create a reactive value.
+ */
+export type ReactiveValue<T> = T | ISignal<T> | (() => T)
+/**
+ * A callback that is called when a reactive value changes.
+ */
 export type ReactiveCallback<T> = (unwrappedValue: T) => void
 
+/**
+ * Unwraps a reactive value to its base value. (untracked)
+ */
 export function getValue<T>(value: ReactiveValue<T>): T {
-  return isSignal(value) ? value.value : value
+  return isSignal(value) ? value.value : isFunction(value) ? value() : value
 }
-
+/**
+ * Binds a reactive value to a callback, executing whenever the value changes.
+ */
 export function bindValue<T>(
   value: ReactiveValue<T>,
   callback: ReactiveCallback<T>
 ): () => void {
   if (isSignal(value)) {
     return value.subscribe(callback)
+  } else if (isFunction(value)) {
+    const dynamicComputed = computed(() => value())
+    return dynamicComputed.subscribe(callback)
   } else {
     callback(value)
     return NOOP
@@ -1289,4 +1396,11 @@ export function bindEvent(
 
 export function isIterable<T>(value: any): value is Iterable<T> {
   return value !== null && typeof value[Symbol.iterator] === "function"
+}
+export function isFunction(source: any): source is Function {
+  return typeof source === "function"
+}
+
+export function isView(value: any): value is View<any> {
+  return value instanceof View
 }

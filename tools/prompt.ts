@@ -2,7 +2,7 @@ import { $ } from "bun"
 
 async function buildPromptTemplate() {
   const internals = (await $`cat dist/internals.d.ts`.quiet()).stdout.toString()
-  const view = (await $`cat dist/view/index.d.ts`.quiet()).stdout.toString()
+  const view = (await $`cat dist/view/internals.d.ts`.quiet()).stdout.toString()
 
   let prompt =
     "The following <interface/> blocks define the core of the '@elucidata/pulse' node package.\n\n[YOUR PROMPT HERE]\n\n"

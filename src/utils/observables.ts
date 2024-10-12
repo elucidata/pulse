@@ -25,11 +25,15 @@ export interface Observable<T> extends ISignal<T> {
 export function observable<T>(
   setup: (emit: (value: T) => void) => () => void
 ): Observable<T> {
+  const id = Math.random().toString(36).slice(2)
   let subscribers = 0
   let teardown: (() => void) | null = null
   const s = signal<T>(undefined as any)
 
   return {
+    get id() {
+      return id
+    },
     get value() {
       return s.value
     },

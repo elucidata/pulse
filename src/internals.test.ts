@@ -190,7 +190,7 @@ describe("Signals Module", () => {
 
     it("should log errors when effect cleanup throws in verbose config", () => {
       config.verbose = true
-      const consoleSpy = spyOn(console, "error")
+      const consoleSpy = spyOn(console, "warn")
       const signal = new Signal(1)
       let observedValue = 0
       let errorHandlerCalled = false
