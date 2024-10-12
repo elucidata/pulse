@@ -3,7 +3,6 @@ import {
   effect,
   isSignal,
   ISignal,
-  untracked,
   isMutableSignal,
   Ident,
   withIdPrefix,
@@ -302,17 +301,17 @@ export class View<P> {
       }
     } catch (error) {
       logVerbose("Error in View builder: ", error)
-      const viewMarkers = createRenderMarkers(`view:${this.id}`)
+      const viewMarkers = new RenderMarker(`view:${this.id}`)
 
       // clear the dom
       this.dom = document.createDocumentFragment()
 
       if (View.activeElement) {
-        viewMarkers.appendTo(View.activeElement)
+        viewMarkers.appendToParent(View.activeElement)
       } else if (this.parent) {
-        viewMarkers.appendTo(this.parent.dom)
+        viewMarkers.appendToParent(this.parent.dom)
       } else {
-        viewMarkers.appendTo(this.dom)
+        viewMarkers.appendToParent(this.dom)
       }
 
       // Display error message between markers
@@ -463,11 +462,11 @@ export function when(
   const activeView = View.active
   const activeElement = View.activeElement
 
-  const whenMarkers = createRenderMarkers(id)
+  const whenMarkers = new RenderMarker(id)
   if (activeElement) {
-    whenMarkers.appendTo(activeElement)
+    whenMarkers.appendToParent(activeElement)
   } else if (activeView) {
-    whenMarkers.appendTo(activeView.dom)
+    whenMarkers.appendToParent(activeView.dom)
   } else {
     return logVerbose("when(): No active view to append markers")
   }
@@ -485,59 +484,58 @@ export function when(
     return View.inRenderContext(boundary, View.activeElement, fn)
   }
 
-  effect(
-    () => {
-      let runThenBuilder: boolean = processCondition(condition)
+  const sourceCondition = computed(() => {
+    return processCondition(condition)
+  })
 
-      if (hasError) {
-        try {
-          removeBetweenMarkers(whenMarkers)
-          hasError = false
-        } catch (error) {
-          logVerbose("Error removing 'when' error content:", error)
-        }
-      }
-
-      if (container) {
-        try {
-          removeBetweenMarkers(whenMarkers)
-          container = null
-        } catch (error) {
-          logVerbose("Error removing 'when' content:", error)
-        }
-      }
-
-      container = document.createDocumentFragment()
-
+  const renderBuilders = (runThenBuilder: boolean) => {
+    if (hasError) {
       try {
-        View.inRenderContext(null, container, () => {
-          untracked(() => {
-            withinBoundary(container, () => {
-              if (runThenBuilder) {
-                thenBuilder()
-              } else if (elseBuilder) {
-                elseBuilder()
-              }
-            })
-          })
-        })
-
-        insertBetweenMarkers(container, whenMarkers)
+        whenMarkers.removeBetween()
+        hasError = false
       } catch (error) {
-        logVerbose("Error in 'when' builder:", error)
-        removeBetweenMarkers(whenMarkers)
-        displayErrorWithinMarkers(whenMarkers, error)
-        container = null
-        hasError = true
+        logVerbose("Error removing 'when' error content:", error)
       }
-    },
-    (err) => {
-      logVerbose("Error in 'when' effect:", err)
-      removeBetweenMarkers(whenMarkers)
-      displayErrorWithinMarkers(whenMarkers, err)
+    }
+
+    if (container) {
+      try {
+        whenMarkers.removeBetween()
+        container = null
+      } catch (error) {
+        logVerbose("Error removing 'when' content:", error)
+      }
+    }
+
+    container = document.createDocumentFragment()
+
+    try {
+      View.inRenderContext(null, container, () => {
+        withinBoundary(container, () => {
+          if (runThenBuilder) {
+            thenBuilder()
+          } else if (elseBuilder) {
+            elseBuilder()
+          }
+        })
+      })
+
+      whenMarkers.insertBetween(container)
+    } catch (error) {
+      logVerbose("Error in 'when' builder:", error)
+      whenMarkers.removeBetween()
+      displayErrorWithinMarkers(whenMarkers, error)
+      container = null
       hasError = true
     }
-  )
+  }
+
+  let lastCondition: Truthy | undefined
+  sourceCondition.subscribe((runThenBuilder) => {
+    if (lastCondition === runThenBuilder) return
+    renderBuilders(runThenBuilder)
+    lastCondition = runThenBuilder
+  })
 }
 
 export function processCondition(
@@ -578,11 +576,11 @@ export function live(builder: () => void) {
   const activeView = View.active
   const activeElement = View.activeElement
 
-  const liveMarkers = createRenderMarkers(id)
+  const liveMarkers = new RenderMarker(id)
   if (activeElement) {
-    liveMarkers.appendTo(activeElement)
+    liveMarkers.appendToParent(activeElement)
   } else if (activeView) {
-    liveMarkers.appendTo(activeView.dom)
+    liveMarkers.appendToParent(activeView.dom)
   } else {
     return logVerbose("live(): No active view to append markers")
   }
@@ -594,7 +592,7 @@ export function live(builder: () => void) {
   effect(() => {
     if (hasError) {
       try {
-        removeBetweenMarkers(liveMarkers)
+        liveMarkers.removeBetween()
         hasError = false
       } catch (error) {
         logVerbose("Error removing 'live' error content:", error)
@@ -603,7 +601,7 @@ export function live(builder: () => void) {
 
     if (container) {
       try {
-        removeBetweenMarkers(liveMarkers)
+        liveMarkers.removeBetween()
         container = null
       } catch (error) {
         logVerbose("Error removing 'live' content:", error)
@@ -620,7 +618,7 @@ export function live(builder: () => void) {
     try {
       View.inRenderContext(boundary, container, builder)
 
-      insertBetweenMarkers(container, liveMarkers)
+      liveMarkers.insertBetween(container)
     } catch (error) {
       logVerbose("Error in 'live' builder:", error)
       displayErrorWithinMarkers(liveMarkers, error)
@@ -636,20 +634,18 @@ export function live(builder: () => void) {
 export function text(value: string | number | ISignal<any>) {
   if (isSignal(value)) {
     const id = Ident.create("text")
-    const textMarkers = createRenderMarkers(id)
+    const textMarkers = new RenderMarker(id)
 
     View.appendToActiveElements(textMarkers.start, textMarkers.end)
     const disposeLiveText = value.subscribe((val) => {
       const textValue = val
-      removeBetweenMarkers(textMarkers)
-      insertBetweenMarkers(
-        document.createTextNode(String(textValue)),
-        textMarkers
-      )
+      textMarkers
+        .removeBetween()
+        .insertBetween(document.createTextNode(String(textValue)))
     })
     View.active?.hooks.onDispose(() => {
       disposeLiveText()
-      removeBetweenMarkers(textMarkers)
+      textMarkers.removeBetween()
     })
     return
   }
@@ -676,7 +672,7 @@ export function raw(html: TemplateStringsArray | string, ...args: any[]) {
 export type KeyedView<T> = {
   key: any
   view: View<any>
-  markers: DOMMarkers
+  markers: RenderMarker
 }
 
 /**
@@ -697,11 +693,11 @@ export function each<T>(
 
   const currentComputaiton = Computation.current
 
-  const eachMarkers = createRenderMarkers(id)
+  const eachMarkers = new RenderMarker(id)
   if (parentElement) {
-    eachMarkers.appendTo(parentElement)
+    eachMarkers.appendToParent(parentElement)
   } else if (parentView) {
-    eachMarkers.appendTo(parentView.dom)
+    eachMarkers.appendToParent(parentView.dom)
   } else {
     return logVerbose("each(): No active view to append markers")
   }
@@ -720,7 +716,7 @@ export function each<T>(
     try {
       if (hasError) {
         try {
-          removeBetweenMarkers(eachMarkers)
+          eachMarkers.removeBetween()
           hasError = false
         } catch (error) {
           logVerbose("Error removing 'each' error content:", error)
@@ -755,7 +751,7 @@ export function each<T>(
         if (!keyedView) {
           const subview = View.createBoundary(boundary, boundary.dom)
           const viewId = Ident.create("each-item", key)
-          const subviewMarkers = createRenderMarkers(viewId)
+          const subviewMarkers = new RenderMarker(viewId)
           const viewFragment = document.createDocumentFragment()
 
           viewFragment.appendChild(subviewMarkers.start)
@@ -783,7 +779,7 @@ export function each<T>(
 
       if (firstRun) {
         // First run, just insert the fragment
-        insertBetweenMarkers(fragment, eachMarkers)
+        eachMarkers.insertBetween(fragment)
 
         firstRun = false
       } else {
@@ -791,8 +787,8 @@ export function each<T>(
         for (const [key, keyedView] of keyedViews) {
           if (!newKeyedViews.has(key)) {
             keyedView.view.dispose()
-            removeBetweenMarkers(keyedView.markers)
-            keyedView.markers.remove()
+            keyedView.markers.removeBetween()
+            keyedView.markers.removeFromParent()
           }
         }
 
@@ -803,25 +799,15 @@ export function each<T>(
 
           for (const keyedView of newKeyedViews.values()) {
             if (!keyedView.markers.start.isConnected) {
-              // logVerbose("Keyed view is not connected, inserting...", keyedView)
               // This is a new view, insert its nodes
-              const nodesToInsert = extractNodesIncludingMarkers(
-                keyedView.markers
-              )
+              const nodesToInsert = keyedView.markers.extractAll()
               parentNode.insertBefore(nodesToInsert, referenceNode)
             } else if (referenceNode === keyedView.markers.start) {
-              // logVerbose(
-              //   "Keyed view is already in the correct position",
-              //   keyedView
-              // )
               // Nodes are already in the correct position
               referenceNode = keyedView.markers.end.nextSibling
             } else {
-              // logVerbose("Keyed view needs to be moved", keyedView)
               // Move the nodes to the correct position
-              const nodesToMove = extractNodesIncludingMarkers(
-                keyedView.markers
-              )
+              const nodesToMove = keyedView.markers.extractAll()
               parentNode.insertBefore(nodesToMove, referenceNode)
             }
 
@@ -837,7 +823,7 @@ export function each<T>(
       keyedViews = newKeyedViews
     } catch (error) {
       logVerbose("Error in 'each' effect:", error)
-      removeBetweenMarkers(eachMarkers)
+      eachMarkers.removeBetween()
       displayErrorWithinMarkers(eachMarkers, error)
       hasError = true
     }
@@ -1031,7 +1017,7 @@ export function convertToNestedCss(
  */
 export function render(viewInstance: View<any>, target: HTMLElement) {
   let id = Ident.create("pulse")
-  let renderMarkers = createRenderMarkers(id)
+  let renderMarkers = new RenderMarker(id)
 
   _activeRoots.add(viewInstance)
 
@@ -1050,8 +1036,8 @@ export function render(viewInstance: View<any>, target: HTMLElement) {
   return () => {
     if (isDisposed) return
     viewInstance.dispose()
-    removeBetweenMarkers(renderMarkers)
-    renderMarkers.remove()
+    renderMarkers.removeBetween()
+    renderMarkers.removeFromParent()
     _activeRoots.delete(viewInstance)
     isDisposed = true
     //@ts-ignore
@@ -1302,54 +1288,51 @@ export function extractPropsAndChildren<P>(args: any[]): [P, Children] {
   }
 }
 
-export function createRenderMarkers(id: string) {
-  return {
-    start: document.createComment(id),
-    end: document.createComment(`/${id}`),
-    appendTo(parent: Node) {
-      parent.appendChild(this.start)
-      parent.appendChild(this.end)
-    },
-    remove() {
-      this.start.remove()
-      this.end.remove()
-    },
+export class RenderMarker {
+  start: Comment
+  end: Comment
+  constructor(public readonly id: string) {
+    this.start = document.createComment(id)
+    this.end = document.createComment(`/${id}`)
+  }
+  appendToParent(parent: Node) {
+    parent.appendChild(this.start)
+    parent.appendChild(this.end)
+    return this
+  }
+  removeFromParent() {
+    this.start.remove()
+    this.end.remove()
+  }
+  insertBetween(node: Node) {
+    if (this.end.parentNode) {
+      this.end.parentNode.insertBefore(node, this.end)
+    }
+    return this
+  }
+  removeBetween() {
+    if (this.start.isConnected) {
+      const range = document.createRange()
+      range.setStartAfter(this.start)
+      range.setEndBefore(this.end)
+      range.deleteContents()
+    }
+    return this
+  }
+  extractAll() {
+    const fragment = document.createDocumentFragment()
+    let currentNode: Node | null = this.start
+    while (currentNode) {
+      const nextNode: Node | null = currentNode.nextSibling
+      fragment.appendChild(currentNode)
+      if (currentNode === this.end) break
+      currentNode = nextNode
+    }
+    return fragment
   }
 }
-export type DOMMarkers = ReturnType<typeof createRenderMarkers>
 
-export function insertBetweenMarkers(node: Node, markers: DOMMarkers) {
-  if (markers.end.parentNode) {
-    markers.end.parentNode.insertBefore(node, markers.end)
-  }
-}
-
-export function removeBetweenMarkers(markers: DOMMarkers) {
-  if (markers.start.isConnected) {
-    const range = document.createRange()
-    range.setStartAfter(markers.start)
-    range.setEndBefore(markers.end)
-    range.deleteContents()
-  }
-}
-
-export function extractNodesIncludingMarkers(
-  markers: DOMMarkers
-): DocumentFragment {
-  const fragment = document.createDocumentFragment()
-  let currentNode: Node | null = markers.start
-
-  while (currentNode) {
-    const nextNode: Node | null = currentNode.nextSibling
-    fragment.appendChild(currentNode)
-    if (currentNode === markers.end) break
-    currentNode = nextNode
-  }
-
-  return fragment
-}
-
-export function displayErrorWithinMarkers(markers: DOMMarkers, error: any) {
+export function displayErrorWithinMarkers(markers: RenderMarker, error: any) {
   const errorMessage = document.createElement("div")
   Object.assign(errorMessage.style, {
     color: "white",
@@ -1363,8 +1346,7 @@ export function displayErrorWithinMarkers(markers: DOMMarkers, error: any) {
   errorMessage.textContent = `[Pulse Error]: ${
     error instanceof Error ? error.message : String(error)
   }`
-
-  insertBetweenMarkers(errorMessage, markers)
+  markers.insertBetween(errorMessage)
 }
 
 export function makeChainable<T extends object>(obj: T): Chainable<T> {
