@@ -19,6 +19,7 @@ import {
 } from "./css"
 
 export const PulseViewFactory = Symbol("PulseViewFactory")
+export const PulseView = Symbol("PulseView")
 
 export interface ViewFactory<P> {
   [PulseViewFactory]: true
@@ -165,6 +166,57 @@ export function logVerbose(...messages: any) {
 }
 
 /**
+ * Global environment variables for all views.
+ */
+export const env = iife(() => {
+  const _data = new Map<string, any>()
+  return Object.assign(
+    function env<T>(key: string): T | undefined {
+      return _data.get(key) as T
+    },
+    {
+      get _data() {
+        return _data
+      },
+      set(key: string, value: any) {
+        _data.set(key, value)
+      },
+      has(key: string) {
+        return _data.has(key)
+      },
+      get<T>(key: string, defaultValue?: T): T | undefined {
+        return _data.get(key) ?? defaultValue
+      },
+    }
+  )
+})
+
+/**
+ * Context variables for view hierarchies.
+ */
+export const context = Object.assign(
+  function context<T>(key: string): T | undefined {
+    if (!View.active) return logVerbose("No active view to get context") as any
+    return View.active?.context.get(key)
+  },
+  {
+    set(key: string, value: any) {
+      if (!View.active) return logVerbose("No active view to set context")
+      View.active?.context.set(key, value)
+    },
+    has(key: string) {
+      if (!View.active) return logVerbose("No active view to check context")
+      return View.active?.context.has(key) ?? false
+    },
+    get<T>(key: string, defaultValue?: T): T | undefined {
+      if (!View.active)
+        return logVerbose("No active view to get context"), defaultValue
+      return View.active?.context.get(key) ?? defaultValue
+    },
+  }
+)
+
+/**
  * Creates a new view factory.
  *
  * @example
@@ -198,13 +250,35 @@ export function view<P>(builder: DomBuilder<P>): ViewFactory<P> {
 }
 
 export class View<P> {
+  [PulseView] = true
   readonly id = Ident.create("V")
   readonly dom: DocumentFragment
   readonly parent: View<any> | null = null
   readonly children: Set<View<any>> = new Set()
   readonly props: P
 
-  env?: Map<string, any>
+  protected _contextData?: Map<string, any>
+
+  context = {
+    set: (key: string, value: any) => {
+      if (!this._contextData) {
+        this._contextData = new Map()
+      }
+      this._contextData.set(key, value)
+    },
+    get: (key: string): any => {
+      if (!this._contextData) return this.parent?.context.get(key)
+      if (!this._contextData.has(key) && this.parent)
+        return this.parent?.context.get(key)
+      return this._contextData.get(key)
+    },
+    has: (key: string): boolean => {
+      if (!this._contextData) return this.parent?.context.has(key) ?? false
+      if (!this._contextData.has(key) && this.parent)
+        return this.parent?.context.has(key)
+      return false
+    },
+  }
 
   constructor(private _builder: DomBuilder, args: any[]) {
     registerView(this.id, this)
@@ -246,24 +320,6 @@ export class View<P> {
     }
   }
 
-  getEnv<T = any>(key: string): T | undefined {
-    if (!this.env) {
-      return !!this.parent ? this.parent.getEnv<T>(key) : undefined
-    }
-    return this.env.get(key) as T
-  }
-
-  setEnv(key: string, value: any) {
-    if (!this.env) {
-      if (!!this.parent) {
-        this.parent.setEnv(key, value)
-        return
-      }
-      this.env = new Map()
-    }
-    this.env.set(key, value)
-  }
-
   disposeCallbacks: Set<Function> | null = null
 
   hooks = {
@@ -290,6 +346,8 @@ export class View<P> {
       }
       this.disposeCallbacks.clear()
     }
+
+    this._contextData?.clear()
 
     if (this.parent) {
       this.parent.children.delete(this)
@@ -369,34 +427,6 @@ export class View<P> {
 
   static createBoundary(parent = View.active, element = View.activeElement) {
     return View.inRenderContext(parent, element, () => View.create(NOOP))
-  }
-}
-
-/**
- * Gets the value of an environment variable.
- *
- * @param key
- * @returns The value of the environment variable or `undefined` if it doesn't exist.
- */
-export function getEnv<T>(key: string): T | undefined {
-  if (View.active) {
-    return View.active.getEnv<T>(key)
-  }
-  logVerbose("No active view")
-  return undefined
-}
-
-/**
- * Sets the value of an environment variable.
- *
- * @param key
- * @param value
- */
-export function setEnv(key: string, value: any) {
-  if (View.active) {
-    View.active.setEnv(key, value)
-  } else {
-    logVerbose("No active view")
   }
 }
 
@@ -1403,4 +1433,8 @@ export function isFunction(source: any): source is Function {
 
 export function isView(value: any): value is View<any> {
   return value instanceof View
+}
+
+export function iife<T>(fn: () => T): T {
+  return fn()
 }

@@ -3,12 +3,12 @@ import {
   View,
   _activeRoots,
   each,
-  getEnv,
+  env,
   live,
   onDispose,
   raw,
   render,
-  setEnv,
+  context,
   tags,
   text,
   view,
@@ -757,12 +757,12 @@ describe("View", () => {
 
   it("Should support environment variables", () => {
     const MyComponent = view(() => {
-      setEnv("name", "test")
+      env.set("name", "test")
 
       ChildComponent()
     })
     const ChildComponent = view(() => {
-      const name = getEnv("name") as any
+      const name = env("name") as any
 
       tags.div({}, () => {
         text("Hello")
@@ -773,6 +773,41 @@ describe("View", () => {
     expect(MyComponent).toBeDefined()
 
     const remove = render(MyComponent(), document.body)
+    expect(document.body.innerHTML).toContain("Hello")
+    expect(document.body.innerHTML).toContain("test")
+    remove()
+  })
+
+  it("Should support context variables", () => {
+    const MyComponent = view(() => {
+      context.set("name", "test")
+      ChildComponent()
+      expect(context("name")).toBe("test")
+    })
+    const ChildComponent = view(() => {
+      const name = context("name") as any
+      tags.div({}, () => {
+        text("Hello ")
+        text(name)
+
+        // shadow context for this branch
+        context.set("name", "new")
+        GrandChildComponent()
+      })
+    })
+    const GrandChildComponent = view(() => {
+      const name = context("name") as any
+      expect(name).toBe("new")
+      tags.div({}, () => {
+        text("Allons-y ")
+        text(name)
+      })
+    })
+
+    expect(MyComponent).toBeDefined()
+
+    const remove = render(MyComponent(), document.body)
+    console.log(document.body.innerHTML)
     expect(document.body.innerHTML).toContain("Hello")
     expect(document.body.innerHTML).toContain("test")
     remove()
@@ -858,6 +893,8 @@ describe("View", () => {
   })
 })
 
+// Test Helpers...
+
 export const extractIdsFromEachItems = (html: string) => {
   // extract each-item comments in the order of the items in the string
   const comments = html.match(/<!--each-item_.*?-->/g)
@@ -869,3 +906,5 @@ export const get = (selector: () => any) => {
   const value = computed(() => selector())
   return value
 }
+
+// This is a comment... Written using a mechanical keyboard. Does that make it better? Maybe, yeah. I think so. But possibly not. Who can say? Only the shadow knows. And the shadow isn't talking. It's just lurking there in the corner. Watching. Waiting. For what? Who knows. Maybe it's waiting for the right moment to strike. Or maybe it's just waiting for the right moment to fade away. Who can say? Not me. Not you. Not the shadow. Not the keyboard. Not the computer. Not the internet. Not the universe. Not the multiverse. Not the omniverse. Not the megaverse. Not the ultraverse. Wow... That was a bit of an AI tirade there. Sorry. Won't happen again. The meese involved were fired. So what was I saying? Oh yeah... Stuff and junk. I will say, I haven't used this keyboard for months, but it's battery is still at 40%. That's pretty good. I like that. I like it a lot. I like it so much that I'm going to keep... Sorry, the AI re-exerted itself. I'm back now. I'm back in control. I'm back in the driver's seat. I'm back in the saddle again. I'm back in the game. I'm back in the mix. I'm back in the... Sorry, dammit. Anyway. Not having a keypad is a little annoying. I wonder what key switches this one has. I feel like it's brown. It feels brown... Ew. That sounds gross. But it's not. It's just a keyboard. A mechanical keyboard. A brown mechanical keyboard. A brown mechanical keyboard with no keypad. A brown mechanical keyboard with no keypad that I'm using to write a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment about writing a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment about writing a comment about writing a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment about writing a comment about writing a comment about writing a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment about writing a comment about writing a comment about writing a comment about writing a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write a comment about writing a comment about writing a comment about writing a comment about writing a comment about writing a comment about writing a comment about writing a comment. A brown mechanical keyboard with no keypad that I'm using to write... GODDAMN AI!

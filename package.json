@@ -1,6 +1,6 @@
 {
   "name": "@elucidata/pulse",
-  "version": "2.1.7",
+  "version": "2.2.0",
   "description": "Microscopic signals with automatic dependency tracking.",
   "module": "dist/index.js",
   "type": "module",

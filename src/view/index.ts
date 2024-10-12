@@ -3,19 +3,19 @@ export { classNames, css } from "./css"
 export {
   ExtractProps,
   ReactiveValue,
+  bindValue,
+  context,
   each,
-  getEnv,
+  env,
+  getValue,
   live,
   onDispose,
   raw,
   render,
-  setEnv,
   tags,
   text,
   view,
   when,
-  getValue,
-  bindValue,
 } from "./internals"
 
 import * as Internals from "./internals"
@@ -30,7 +30,7 @@ export type View<P> = Pick<
 export type ViewFactory<P> = Internals.ViewFactory<P>
 
 export function isView(value: any): value is View<any> {
-  return value instanceof Internals.View
+  return typeof value === "object" && Internals.PulseView in value
 }
 
 export function isViewFactory(value: any): value is ViewFactory<any> {
