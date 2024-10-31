@@ -160,7 +160,7 @@ export const unregisterView = (key: string) => {
 
 export function logVerbose(...messages: any) {
   if (config.verbose) {
-    console.warn("[Pulse View]", ...messages)
+    console.warn("[PulseView]", ...messages)
   }
 }
 
@@ -484,10 +484,6 @@ export function when(
     return View.inRenderContext(boundary, View.activeElement, fn)
   }
 
-  const sourceCondition = computed(() => {
-    return processCondition(condition)
-  })
-
   const renderBuilders = (runThenBuilder: boolean) => {
     if (hasError) {
       try {
@@ -530,11 +526,40 @@ export function when(
     }
   }
 
-  let lastCondition: Truthy | undefined
-  sourceCondition.subscribe((runThenBuilder) => {
-    if (lastCondition === runThenBuilder) return
-    renderBuilders(runThenBuilder)
-    lastCondition = runThenBuilder
+  effect(
+    () => {
+      const runThenBuilder = processCondition(condition)
+      try {
+        renderBuilders(runThenBuilder)
+      } catch (error) {
+        logVerbose("Error in 'when' effect:", error)
+        whenMarkers.removeBetween()
+        displayErrorWithinMarkers(whenMarkers, error)
+        container = null
+        hasError = true
+      }
+    },
+    () => {
+      if (boundary) boundary.dispose()
+    }
+  )
+
+  // const sourceCondition = computed(() => {
+  //   return processCondition(condition)
+  // })
+  // let hasRun = false
+  // let lastCondition: Truthy
+  // const stopReacting = sourceCondition.subscribe((runThenBuilder) => {
+  //   if (hasRun && lastCondition === runThenBuilder)
+  //     return
+  //   renderBuilders(runThenBuilder)
+  //   lastCondition = runThenBuilder
+  //   hasRun = true
+  // })
+
+  activeView?.hooks.onDispose(() => {
+    // stopReacting()
+    if (boundary) boundary.dispose()
   })
 }
 
