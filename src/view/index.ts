@@ -16,6 +16,7 @@ export {
   text,
   view,
   when,
+  customPulseElement,
 } from "./internals"
 
 import * as Internals from "./internals"

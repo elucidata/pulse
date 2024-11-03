@@ -6,9 +6,11 @@ import {
   isMutableSignal,
   Ident,
   withIdPrefix,
+  signal,
   computed,
   register,
   Computation,
+  IMutableSignal,
 } from "../internals"
 import {
   css as cssTemplate,
@@ -1444,4 +1446,55 @@ export function isView(value: any): value is View<any> {
 
 export function iife<T>(fn: () => T): T {
   return fn()
+}
+
+/**
+ * Defines a custom element tag that will render a Pulse view.
+ *
+ * @param tagName - The name of the custom element tag to define.
+ * @param observedProps - The names of the properties that will be observed for changes.
+ * @param viewFactory - A function that creates a Pulse view.
+ */
+export function customPulseElement(
+  tagName: string,
+  observedProps: string[],
+  viewFactory: ViewFactory<any>
+) {
+  if (customElements.get(tagName)) {
+    return console.warn(`${tagName} already defined`)
+  }
+  customElements.define(
+    tagName,
+    class PulseViewCustomTag extends HTMLElement {
+      static observedProps = observedProps
+      static observedAttributes = observedProps
+      props: Record<string, IMutableSignal<any>>
+      dispose: () => void | undefined
+
+      constructor() {
+        super()
+        this.props = { innerHTML: this.innerHTML as any }
+        this.innerHTML = ""
+        for (const prop of observedProps) {
+          this.props[prop] = signal(this.getAttribute(prop))
+        }
+      }
+
+      attributeChangedCallback(
+        name: string,
+        _oldValue: string,
+        newValue: string
+      ) {
+        this.props[name]?.set(newValue)
+      }
+
+      connectedCallback() {
+        this.dispose = render(viewFactory(this.props), this)
+      }
+
+      disconnectedCallback() {
+        this.dispose?.()
+      }
+    }
+  )
 }
