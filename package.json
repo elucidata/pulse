@@ -1,6 +1,6 @@
 {
   "name": "@elucidata/pulse",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Microscopic signals with automatic dependency tracking.",
   "module": "dist/index.js",
   "type": "module",
@@ -44,7 +44,7 @@
     "stats": "bun run ./tools/stats.ts",
     "stats:old": "echo \"all gzipped:\" && bun run stats:all",
     "stats:all": "gzip -c9 dist/index.js dist/chunk*.js dist/utils/index.js dist/react/index.js dist/view/index.js dist/view/html.js | wc -c | numfmt --to=si",
-    "prepublish": "bun run dist",
+    "prepublishOnly": "bun run dist",
     "test": "bun test"
   },
   "devDependencies": {
