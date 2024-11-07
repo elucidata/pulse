@@ -1468,13 +1468,12 @@ export function customPulseElement(
     class PulseViewCustomTag extends HTMLElement {
       static observedProps = observedProps
       static observedAttributes = observedProps
-      props: Record<string, IMutableSignal<any>>
+      props: Record<string, IMutableSignal<any>> & { element: HTMLElement }
       dispose: () => void | undefined
 
       constructor() {
         super()
-        this.props = { innerHTML: this.innerHTML as any }
-        this.innerHTML = ""
+        this.props = { element: this as any }
         for (const prop of observedProps) {
           this.props[prop] = signal(this.getAttribute(prop))
         }
